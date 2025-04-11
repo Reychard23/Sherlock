@@ -1,6 +1,8 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, Request, File, UploadFile
+from fastapi.responses import JSONResponse
 import pandas as pd
 import io
+
 
 app = FastAPI()
 

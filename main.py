@@ -27,3 +27,8 @@ async def upload_excel(file: UploadFile = File(...)):
         "columns": df.columns.tolist(),
         "row_count": len(df)
     }
+@app.post("/slack")
+async def slack_command(payload: dict):
+    # Procesa la solicitud de Slack y genera la respuesta.
+    # Por ejemplo, extrae el comando y parámetros y decide qué hacer.
+    return {"text": "Hola, esta es la respuesta de Sherlock"}

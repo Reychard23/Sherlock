@@ -28,7 +28,9 @@ async def upload_excel(file: UploadFile = File(...)):
         "row_count": len(df)
     }
 @app.post("/slack")
-async def slack_command(payload: dict):
-    # Procesa la solicitud de Slack y genera la respuesta.
-    # Por ejemplo, extrae el comando y parámetros y decide qué hacer.
-    return {"text": "Hola, esta es la respuesta de Sherlock"}
+async def slack_command(request: Request):
+    # Obtener el payload del comando (lo puedes imprimir para depurar)
+    form_data = await request.form()
+    print("Payload recibido:", form_data)  # Esto se verá en los logs de Render
+    # Responder con un mensaje simple en formato que Slack entienda
+    return JSONResponse({"text": "Hola, esta es la respuesta de Sherlock"}, status_code=200)

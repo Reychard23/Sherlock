@@ -10,25 +10,21 @@ app = FastAPI()
 async def read_root():
     return {"message": "Hola, reychard"}
 
+from typing import List
 @app.post("/upload-excel/")
-async def upload_excel(file: UploadFile = File(...)):
-    valid_types = [
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-excel"
-    ]
-    if file.content_type not in valid_types:
-        return {"error": "El archivo no es un Excel válido. Asegúrate de subir un archivo .xlsx o .xls."}
-
-    # Leer el archivo con Pandas
-    data = await file.read()  # Leer el contenido del archivo
-    df = pd.read_excel(io.BytesIO(data))
-    
-    # Retornar algunas estadísticas básicas
-    return {
-        "filename": file.filename,
-        "columns": df.columns.tolist(),
-        "row_count": len(df)
-    }
+async def upload_excel(files: List[UploadFile] = File(...)):
+    # Procesar cada archivo
+    resultados = []
+    for file in files:
+        # Procesa cada archivo y agrega resultados a la lista
+        data = await file.read()  
+        df = pd.read_excel(io.BytesIO(data))
+        resultados.append({
+            "filename": file.filename,
+            "columns": df.columns.tolist(),
+            "row_count": len(df)
+        })
+    return {"resultados": resultados}
 @app.post("/slack")
 async def slack_command(request: Request):
     # Obtener el payload del comando (lo puedes imprimir para depurar)

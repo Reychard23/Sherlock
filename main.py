@@ -35,4 +35,4 @@ async def slack_command(request: Request):
     form_data = await request.form()
     print("Payload recibido:", form_data)  # Esto se verá en los logs de Render
     # Responder con un mensaje simple en formato que Slack entienda
-    return JSONResponse({"text": "Hola, esta es la respuesta de Sherlock"}, status_code=200)
+    return JSONResponse({"text": "Hola, yo soy Sherlock, y pronto estaré disponible para analizar tus datos"}, status_code=200)

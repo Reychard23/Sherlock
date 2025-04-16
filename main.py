@@ -10,31 +10,25 @@ app = FastAPI()
 async def read_root():
     return {"message": "Hola, reychard"}
 
-# ¡Falta el decorador aquí!
 @app.post("/upload-excel/")
 async def upload_excel(files: List[UploadFile] = File(...)):
-    
     resultados = []
     for file in files:
         try:
-            data = await file.read()
+            data = await file.read()  
             df = pd.read_excel(io.BytesIO(data))
-            mapeo = mapping_dict.get(file.filename, {})
-            if mapeo:
-                df.rename(columns=mapeo, inplace=True)
-
             resultados.append({
                 "filename": file.filename,
                 "columns": df.columns.tolist(),
                 "row_count": len(df)
             })
         except Exception as e:
+            # Capturamos el error y lo devolvemos para ese archivo
             resultados.append({
                 "filename": file.filename,
                 "error": str(e)
             })
-
-    return {"resultados": resultados}  # Asegúrate de que esté alineado con 'resultados = []'
+    return {"resultados": resultados}
 
 @app.post("/slack")
 async def slack_command(request: Request):

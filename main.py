@@ -11,7 +11,7 @@ async def read_root():
     return {"message": "Hola, reychard"}
 
 # ¡Falta el decorador aquí!
-@app.post("/upload-excel")
+@app.post("/upload-excel/")
 async def upload_excel(files: List[UploadFile] = File(...)):
     indice_df = pd.read_excel("indice.xlsx")
     mapping_dict = {}

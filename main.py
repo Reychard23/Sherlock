@@ -12,8 +12,23 @@ async def read_root():
 
 @app.post("/upload-excel/")
 async def upload_excel(files: List[UploadFile] = File(...)):
-    # 1. Cargo el índice y construyo mapping_dict
-    indice_df    = pd.read_excel("indice.xlsx")
+    # 1. Busco dentro de los archivos subidos el índice
+    index_file = None
+    for f in files:
+        if f.filename.lower() == "indice.xlsx":
+            index_file = f
+            break
+    if not index_file:
+        return JSONResponse({"error": "No se encontró archivo indice.xlsx"}, status_code=400)
+
+    # 2. Leo el índice desde la memoria
+    data_index = await index_file.read()
+    indice_df  = pd.read_excel(io.BytesIO(data_index))
+
+    # 3. Quito el índice de la lista para no procesarlo como dato
+    data_files = [f for f in files if f is not index_file]
+
+    # 4. Construyo el diccionario de mapeo
     mapping_dict = {}
     for _, row in indice_df.iterrows():
         archivo     = row["Archivo"].strip()
@@ -22,31 +37,28 @@ async def upload_excel(files: List[UploadFile] = File(...)):
         mapping_dict.setdefault(archivo, {})[columna] = descripcion
 
     resultados = []
-    for file in files:
+    # 5. Ahora itero solo sobre los archivos de datos
+    for file in data_files:
         try:
-            # —————— Leer contenido y crear DataFrame (igual que antes)
-            data = await file.read()  
+            data = await file.read()
             df   = pd.read_excel(io.BytesIO(data))
 
-            # —————— Renombrado según mapeo (nuevo)
+            # renombrado según mapeo
             mapeo = mapping_dict.get(file.filename, {})
             if mapeo:
                 df.rename(columns=mapeo, inplace=True)
 
-            # —————— Aquí vuelve tu append original
             resultados.append({
                 "filename": file.filename,
                 "columns":  df.columns.tolist(),
                 "row_count": len(df)
             })
         except Exception as e:
-            # Capturamos el error y lo devolvemos para ese archivo
             resultados.append({
                 "filename": file.filename,
                 "error":    str(e)
             })
 
-    # —————— Devuelvo todos los resultados al final
     return {"resultados": resultados}
 
 @app.post("/slack")

@@ -6,32 +6,38 @@ import io
 
 app = FastAPI()
 
+# Fuera de cualquier función, en el scope del módulo:
+mapping_dict = {}      # Aquí guardaremos el mapeo una vez
+mapping_loaded = False # Indicador de que ya cargamos el índice
+
 @app.get("/")
 async def read_root():
     return {"message": "Hola, reychard"}
 
 @app.post("/upload-excel/")
 async def upload_excel(files: List[UploadFile] = File(...)):
-    # 1. Extraigo y leo índice.xlsx desde los UploadFile
-    index_file = next((f for f in files if f.filename.lower() == "indice.xlsx"), None)
-    if not index_file:
-        return JSONResponse(
-            {"error": "No se encontró indice.xlsx entre los archivos subidos."},
-            status_code=400
-        )
-    raw_index = await index_file.read()
-    indice_df  = pd.read_excel(io.BytesIO(raw_index))
+    global mapping_dict, mapping_loaded
 
-    # 2. Construyo el mapping_dict
-    mapping_dict = {}
-    for _, row in indice_df.iterrows():
-        arch   = row["Archivo"].strip()
-        orig   = row["Columna"].strip()
-        uni    = row["Descripción"].strip()
-        mapping_dict.setdefault(arch, {})[orig] = uni
+    # ——— 1. Si aún no cargamos el índice, búscalo y constrúyelo ———
+    if not mapping_loaded:
+        index_file = next((f for f in files if f.filename.lower() == "indice.xlsx"), None)
+        if not index_file:
+            return JSONResponse(
+                {"error": "Primero debes subir indice.xlsx en un request aparte."},
+                status_code=400
+            )
+        raw_index = await index_file.read()
+        df_index  = pd.read_excel(io.BytesIO(raw_index))
+        # Construimos el dict una sola vez
+        for _, row in df_index.iterrows():
+            arch   = row["Archivo"].strip()
+            orig   = row["Columna"].strip()
+            uni    = row["Descripción"].strip()
+            mapping_dict.setdefault(arch, {})[orig] = uni
+        mapping_loaded = True  # Marcamos que ya lo cargamos
 
-    # 3. Filtro los archivos de datos (todo excepto indice.xlsx)
-    data_files = [f for f in files if f is not index_file]
+    # ——— 2. Procesamos solo los archivos de datos (excluimos indice.xlsx) ———
+    data_files = [f for f in files if f.filename.lower() != "indice.xlsx"]
 
     resultados = []
     for file in data_files:
@@ -39,7 +45,7 @@ async def upload_excel(files: List[UploadFile] = File(...)):
             raw = await file.read()
             df  = pd.read_excel(io.BytesIO(raw))
 
-            # 4. Aplico el renombrado si hay mapeo
+            # ——— 3. Renombrado según el mapping ya cargado ———
             mapeo = mapping_dict.get(file.filename, {})
             if mapeo:
                 df.rename(columns=mapeo, inplace=True)

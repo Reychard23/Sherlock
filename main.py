@@ -12,22 +12,41 @@ async def read_root():
 
 @app.post("/upload-excel/")
 async def upload_excel(files: List[UploadFile] = File(...)):
+    # 1. Cargo el índice y construyo mapping_dict
+    indice_df    = pd.read_excel("indice.xlsx")
+    mapping_dict = {}
+    for _, row in indice_df.iterrows():
+        archivo     = row["Archivo"].strip()
+        columna     = row["Columna"].strip()
+        descripcion = row["Descripción"].strip()
+        mapping_dict.setdefault(archivo, {})[columna] = descripcion
+
     resultados = []
     for file in files:
         try:
+            # —————— Leer contenido y crear DataFrame (igual que antes)
             data = await file.read()  
-            df = pd.read_excel(io.BytesIO(data))
+            df   = pd.read_excel(io.BytesIO(data))
+
+            # —————— Renombrado según mapeo (nuevo)
+            mapeo = mapping_dict.get(file.filename, {})
+            if mapeo:
+                df.rename(columns=mapeo, inplace=True)
+
+            # —————— Aquí vuelve tu append original
             resultados.append({
                 "filename": file.filename,
-                "columns": df.columns.tolist(),
+                "columns":  df.columns.tolist(),
                 "row_count": len(df)
             })
         except Exception as e:
             # Capturamos el error y lo devolvemos para ese archivo
             resultados.append({
                 "filename": file.filename,
-                "error": str(e)
+                "error":    str(e)
             })
+
+    # —————— Devuelvo todos los resultados al final
     return {"resultados": resultados}
 
 @app.post("/slack")

@@ -13,14 +13,7 @@ async def read_root():
 # ¡Falta el decorador aquí!
 @app.post("/upload-excel/")
 async def upload_excel(files: List[UploadFile] = File(...)):
-    indice_df = pd.read_excel("indice.xlsx")
-    mapping_dict = {}
-    for _, row in indice_df.iterrows():
-        archivo = row["Archivo"].strip()
-        columna = row["Columna"].strip()
-        descripcion = row["Descripción"].strip()
-        mapping_dict.setdefault(archivo, {})[columna] = descripcion
-
+    
     resultados = []
     for file in files:
         try:

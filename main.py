@@ -13,20 +13,40 @@ async def read_root():
 @app.post("/upload-excel/")
 async def upload_excel(files: List[UploadFile] = File(...)):
     resultados = []
+    # Lee el archivo índice para el mapeo (suponiendo que "índice.xlsx" esté en un lugar accesible)
+    indice_df = pd.read_excel("indice.xlsx")
+    mapping_dict = {}
+    for _, row in indice_df.iterrows():
+        archivo = row["Archivo"].strip()
+        columna = row["Columna"].strip()
+        descripcion = row["Descripción"].strip()
+        if archivo not in mapping_dict:
+            mapping_dict[archivo] = {}
+        mapping_dict[archivo][columna] = descripcion
+
     for file in files:
         try:
-            # Leer cada Excel y devolver nombre, columnas y número de filas
-            data = await file.read()
+            data = await file.read()  
             df = pd.read_excel(io.BytesIO(data))
-            resultados.append({
-                "filename":  file.filename,
-                "columns":   df.columns.tolist(),
-                "row_count": len(df)
-            })
+            
+            # Si existe un mapeo para este archivo, renombrar las columnas
+            mapeo = mapping_dict.get(file.filename, {})
+            if mapeo:
+                df.rename(columns=mapeo, inplace=True)
+            
+            # Realiza el análisis o cruza datos según sea necesario
+            # Aquí puedes aplicar otros filtros o merges si tienes más DataFrames
+            resumen = {
+                "filename": file.filename,
+                "row_count": len(df),
+                "columns": df.columns.tolist(),
+                # Puedes incluir resúmenes estadísticos o conteos de valores perdidos, etc.
+            }
+            resultados.append(resumen)
         except Exception as e:
             resultados.append({
                 "filename": file.filename,
-                "error":    str(e)
+                "error": str(e)
             })
     return {"resultados": resultados}
 

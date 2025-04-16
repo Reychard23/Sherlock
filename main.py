@@ -13,37 +13,17 @@ async def read_root():
 @app.post("/upload-excel/")
 async def upload_excel(files: List[UploadFile] = File(...)):
     resultados = []
-    # Lee el archivo índice para el mapeo (suponiendo que "índice.xlsx" esté en un lugar accesible)
-    indice_df = pd.read_excel("indice.xlsx")
-    mapping_dict = {}
-    for _, row in indice_df.iterrows():
-        archivo = row["Archivo"].strip()
-        columna = row["Columna"].strip()
-        descripcion = row["Descripción"].strip()
-        if archivo not in mapping_dict:
-            mapping_dict[archivo] = {}
-        mapping_dict[archivo][columna] = descripcion
-
     for file in files:
         try:
             data = await file.read()  
             df = pd.read_excel(io.BytesIO(data))
-            
-            # Si existe un mapeo para este archivo, renombrar las columnas
-            mapeo = mapping_dict.get(file.filename, {})
-            if mapeo:
-                df.rename(columns=mapeo, inplace=True)
-            
-            # Realiza el análisis o cruza datos según sea necesario
-            # Aquí puedes aplicar otros filtros o merges si tienes más DataFrames
-            resumen = {
+            resultados.append({
                 "filename": file.filename,
-                "row_count": len(df),
                 "columns": df.columns.tolist(),
-                # Puedes incluir resúmenes estadísticos o conteos de valores perdidos, etc.
-            }
-            resultados.append(resumen)
+                "row_count": len(df)
+            })
         except Exception as e:
+            # Capturamos el error y lo devolvemos para ese archivo
             resultados.append({
                 "filename": file.filename,
                 "error": str(e)
@@ -54,7 +34,4 @@ async def upload_excel(files: List[UploadFile] = File(...)):
 async def slack_command(request: Request):
     form_data = await request.form()
     print("Payload recibido:", form_data)
-    return JSONResponse(
-        {"text": "Hola, esta es la respuesta de Sherlock"},
-        status_code=200
-    )
+    return JSONResponse({"text": "Hola, yo soy Sherlock, y pronto estaré disponible para analizar tus datos"}, status_code=200)

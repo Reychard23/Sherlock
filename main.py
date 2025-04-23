@@ -71,10 +71,10 @@ async def process_files_endpoint():
         # Agregar manejo de errores en la lectura de filas del índice si alguna celda está vacía inesperadamente
         try:
             archivo = str(row["Archivo"]).strip()
-            hoja     = str(row["Sheet"]).strip()
-            orig     = str(row["Columna"]).strip()
-            nuevo   = str(row["Nombre unificado"]).strip()
-            accion   = str(row["Acción"]).strip().lower()
+            hoja = str(row["Sheet"]).strip()
+            orig = str(row["Columna"]).strip()
+            nuevo = str(row["Nombre unificado"]).strip()
+            accion = str(row["Acción"]).strip().lower()
 
             key = (archivo, hoja)
             if accion == "drop":
@@ -107,10 +107,11 @@ async def process_files_endpoint():
     }
     uploaded = set(_saved_files.keys()) - {"indice.xlsx"}
     # Ajustar indexed para que solo use archivos presentes en la lista 'expected' si usas la lista fija
-    indexed   = {archivo for (archivo, _) in rename_dict.keys() if archivo in expected}
+    indexed = {archivo for (archivo, _)
+               in rename_dict.keys() if archivo in expected}
 
-    faltan   = expected - uploaded
-    sobran   = uploaded - expected
+    faltan = expected - uploaded
+    sobran = uploaded - expected
     # no_index = (uploaded & expected) - indexed # Lógica anterior, puede ser confusa
     # Nueva lógica: archivos subidos que están en la lista expected pero no tienen entradas 'keep' en el índice
     no_index = {archivo for archivo in (
@@ -150,8 +151,8 @@ async def process_files_endpoint():
             # pero lo dejamos como salvaguarda.
             errores_procesamiento.append({
                 "archivo": archivo,
-                "hoja":    hoja,
-                "error":   "Archivo no subido (error de lógica interna o validación previa fallida)"
+                "hoja":     hoja,
+                "error":   "Archivo no subido (error de lógica interna o validación previa fallida)"
             })
             continue
 
@@ -189,18 +190,18 @@ async def process_files_endpoint():
             _processed_dfs[base_filename] = df
 
             resultados.append({
-                "archivo":   archivo,
-                "hoja":      hoja,
-                "status":   "Procesado exitosamente",
-                "columns":   df.columns.tolist(),  # Mostrar columnas después de drop/rename
+                "archivo":   archivo,
+                "hoja":      hoja,
+                "status":   "Procesado exitosamente",
+                "columns":   df.columns.tolist(),  # Mostrar columnas después de drop/rename
                 "row_count": len(df)
             })
         except Exception as e:
             # Capturar errores específicos de pandas si es posible, o dejar Exception general
             errores_procesamiento.append({
                 "archivo": archivo,
-                "hoja":    hoja,
-                "error":   f"Error durante el procesamiento con Pandas: {str(e)}"
+                "hoja":    hoja,
+                "error":   f"Error durante el procesamiento con Pandas: {str(e)}"
             })
 
      # 5) Devolver resultados (incluyendo errores de procesamiento si hubo)

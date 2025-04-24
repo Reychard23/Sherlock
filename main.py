@@ -16,7 +16,6 @@ _processed_dfs: dict[str, pd.DataFrame] = {}
 def calcular_pacientes_nuevos_atendidos(dataframes: Dict[str, pd.DataFrame]) -> int:
     """
     Calcula el número total de pacientes nuevos atendidos.
-    ... (el código completo de la función que te pasé antes) ...
     """
     try:
         # ... (código de la función) ...
@@ -169,10 +168,10 @@ async def process_files_endpoint():
                 continue
 
             archivo = str(row["Archivo"]).strip()
-            hoja     = str(row["Sheet"]).strip()
-            orig     = str(row["Columna"]).strip()
-            nuevo   = str(row["Nombre unificado"]).strip()
-            accion   = str(row["Acción"]).strip().lower()
+            hoja = str(row["Sheet"]).strip()
+            orig = str(row["Columna"]).strip()
+            nuevo = str(row["Nombre unificado"]).strip()
+            accion = str(row["Acción"]).strip().lower()
 
             # Validar que los campos importantes no estén vacíos después del strip
             if not archivo or not hoja or not orig or not accion:
@@ -207,8 +206,8 @@ async def process_files_endpoint():
 
     uploaded = set(_saved_files.keys()) - {"indice.xlsx"}
 
-    faltan   = expected - uploaded
-    sobran   = uploaded - expected
+    faltan = expected - uploaded
+    sobran = uploaded - expected
     # Archivos esperados según el índice pero que no se subieron
     # Estos no se pueden procesar, se añadirán a advertencias
     archivos_faltantes_no_procesables = list(faltan)
@@ -291,10 +290,10 @@ async def process_files_endpoint():
             _processed_dfs[base_filename] = df
 
             resultados.append({
-                "archivo":   archivo,
-                "hoja":      hoja,
-                "status":   "Procesado exitosamente",
-                "columns":   df.columns.tolist(),
+                "archivo":   archivo,
+                "hoja":      hoja,
+                "status":   "Procesado exitosamente",
+                "columns":   df.columns.tolist(),
                 "row_count": len(df)
             })
             archivos_procesados_con_exito.add(archivo)
@@ -303,8 +302,8 @@ async def process_files_endpoint():
             # Capturar errores durante el procesamiento de un archivo/hoja específico
             advertencias.append({
                 "archivo": archivo,
-                "hoja":    hoja,
-                "error":   f"Error durante el procesamiento con Pandas: {str(e)}"
+                "hoja":    hoja,
+                "error":   f"Error durante el procesamiento con Pandas: {str(e)}"
             })
 
     # 5) Reportar archivos esperados que no pudieron ser procesados (si aplica)

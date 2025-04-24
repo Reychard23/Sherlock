@@ -127,171 +127,206 @@ async def upload_excel(files: List[UploadFile] = File(...)):
 
 @app.post("/process-excel/")
 async def process_files_endpoint():
+    """
+    Endpoint para procesar los archivos Excel subidos,
+    aplicando la lógica del índice para limpieza y renombrado.
+    Almacena los DataFrames procesados en memoria.
+    Maneja advertencias si faltan archivos esperados o sobran inesperados.
+    """
+    # Limpiar DataFrames procesados anteriores antes de empezar
+    _processed_dfs.clear()
+    resultados = []
+    advertencias = []  # Lista para acumular advertencias
+
     # 1) Leer el índice desde memoria
     raw_index = _saved_files.get("indice.xlsx")
     if raw_index is None:
-        return JSONResponse({"error": "No se subió indice.xlsx"}, status_code=400)
+        # Este es un error fatal, el índice es indispensable
+        return JSONResponse({"error": "No se subió indice.xlsx. El índice es necesario para procesar."}, status_code=400)
     try:
         indice_df = pd.read_excel(io.BytesIO(raw_index))
     except Exception as e:
-        return JSONResponse({"error": f"Error al leer indice.xlsx: {str(e)}"}, status_code=400)
+        return JSONResponse({"error": f"Error al leer indice.xlsx: {str(e)}. Asegúrese de que sea un archivo Excel válido."}, status_code=400)
 
     # 2) Construir rename_dict y drop_set
     rename_dict: dict[tuple[str, str], dict[str, str]] = {}
     drop_set: set[tuple[str, str, str]] = set()
 
-    # Validar que las columnas esperadas estén en el índice
     required_cols = ["Archivo", "Sheet",
                      "Columna", "Nombre unificado", "Acción"]
     if not all(col in indice_df.columns for col in required_cols):
         missing = [col for col in required_cols if col not in indice_df.columns]
-        return JSONResponse({"error": f"Columnas requeridas faltantes en indice.xlsx: {missing}"}, status_code=400)
+        return JSONResponse({"error": f"Columnas requeridas faltantes en indice.xlsx: {missing}. Asegúrese de que el archivo índice tenga las columnas correctas."}, status_code=400)
 
-    for _, row in indice_df.iterrows():
-        # Agregar manejo de errores en la lectura de filas del índice si alguna celda está vacía inesperadamente
+    # Procesar filas del índice para construir diccionarios de mapeo y eliminación
+    for idx, row in indice_df.iterrows():
         try:
+            # Añadir verificación básica de que los valores no son NaN antes de strip
+            if pd.isna(row["Archivo"]) or pd.isna(row["Sheet"]) or pd.isna(row["Columna"]) or pd.isna(row["Nombre unificado"]) or pd.isna(row["Acción"]):
+                # +2 para contar encabezado y empezar en 1
+                advertencias.append(
+                    f"Fila {idx+2} en indice.xlsx contiene valores faltantes en columnas clave y será ignorada.")
+                continue
+
             archivo = str(row["Archivo"]).strip()
-            hoja = str(row["Sheet"]).strip()
-            orig = str(row["Columna"]).strip()
-            nuevo = str(row["Nombre unificado"]).strip()
-            accion = str(row["Acción"]).strip().lower()
+            hoja     = str(row["Sheet"]).strip()
+            orig     = str(row["Columna"]).strip()
+            nuevo   = str(row["Nombre unificado"]).strip()
+            accion   = str(row["Acción"]).strip().lower()
+
+            # Validar que los campos importantes no estén vacíos después del strip
+            if not archivo or not hoja or not orig or not accion:
+                advertencias.append(
+                    f"Fila {idx+2} en indice.xlsx tiene campos vacíos después de limpiar y será ignorada.")
+                continue
 
             key = (archivo, hoja)
             if accion == "drop":
                 drop_set.add((archivo, hoja, orig))
-            elif accion == "keep":  # Asegurarnos de que solo 'keep' renombra
-                # Inicializar el diccionario interior si no existe
+            elif accion == "keep":
                 if key not in rename_dict:
                     rename_dict[key] = {}
                 rename_dict[key][orig] = nuevo
-            # Ignorar otras acciones no reconocidas en el índice
+            else:
+                # Advertencia si la acción no es 'keep' ni 'drop'
+                advertencias.append(
+                    f"Fila {idx+2} en indice.xlsx tiene acción '{accion}' no reconocida para columna '{orig}' en archivo '{archivo}' hoja '{hoja}'. La fila será ignorada.")
 
         except Exception as e:
-            return JSONResponse({"error": f"Error procesando fila en indice.xlsx: {row.to_dict()} - {str(e)}"}, status_code=400)
+            # Capturar errores al procesar filas individuales del índice
+            advertencias.append(
+                f"Error procesando fila {idx+2} en indice.xlsx: {str(e)}. Fila: {row.to_dict()}.")
 
-    # 3) Validar contra la lista esperada de archivos (Puedes mantener esta lista o hacerla dinámica desde el índice si prefieres)
-    # expected = {archivo for (archivo, _) in rename_dict.keys()} # Opción: derivar esperados del índice
-    expected = {  # Lista hardcodeada que tenías, es válida si es fija
-        "Pacientes_Nuevos.xlsx",
-        "Acciones.xlsx",
-        "Citas_Motivo.xlsx",
-        "Citas_Pacientes.xlsx",
-        "Presupuesto por Accion.xlsx",
-        "Respuestas_Encuestas.xlsx",
-        "Tratamiento Generado Mex.xlsx",
-        "Tabla Gastos Aliadas Mexico.xlsx",
-        "Movimiento.xlsx",
-        "Sucursal.xlsx",
-        "Tabla_Procedimientos.xlsx",
-        "Tipos de pacientes.xlsx",
-    }
+    # 3) Validar contra la lista esperada de archivos Y los archivos subidos
+    # Derivar la lista de archivos esperados *del índice* donde hay al menos una acción 'keep'
+    # Esto hace que la lista de 'expected' sea dinámica basada en el índice proporcionado
+    expected = {archivo for (archivo, _) in rename_dict.keys()}
+
+    # También consideramos los archivos mencionados en el índice con acciones 'drop'
+    expected.update({archivo for (archivo, _, _) in drop_set})
+
     uploaded = set(_saved_files.keys()) - {"indice.xlsx"}
-    # Ajustar indexed para que solo use archivos presentes en la lista 'expected' si usas la lista fija
-    indexed = {archivo for (archivo, _)
-               in rename_dict.keys() if archivo in expected}
 
-    faltan = expected - uploaded
-    sobran = uploaded - expected
-    # no_index = (uploaded & expected) - indexed # Lógica anterior, puede ser confusa
-    # Nueva lógica: archivos subidos que están en la lista expected pero no tienen entradas 'keep' en el índice
-    no_index = {archivo for archivo in (
-        uploaded & expected) if archivo not in indexed}
+    faltan   = expected - uploaded
+    sobran   = uploaded - expected
+    # Archivos esperados según el índice pero que no se subieron
+    # Estos no se pueden procesar, se añadirán a advertencias
+    archivos_faltantes_no_procesables = list(faltan)
 
+    # Archivos subidos que no estaban en el índice (ni para keep ni para drop)
+    # Estos tampoco se procesarán
+    archivos_sobrantes_no_procesables = list(sobran)
+
+    # === MODIFICACIÓN: No retornar error 400 aquí, añadir advertencias ===
     if faltan:
-        return JSONResponse(
-            {"error": f"No se subieron estos archivos esperados: {sorted(faltan)}"},
-            status_code=400
-        )
+        # Considerar si la falta de ciertos archivos clave (como Citas_Pacientes)
+        # debería ser un error fatal. Por ahora, solo es advertencia.
+        advertencias.append(
+            f"ADVERTENCIA: No se subieron estos archivos esperados (listados en el índice): {sorted(faltan)}. No podrán ser procesados.")
     if sobran:
-        # Advertencia en lugar de error fatal si suben archivos extra? Depende de si quieres ser estricto.
-        # Por ahora, lo mantenemos como error.
-        return JSONResponse(
-            {"error": f"Se subieron archivos no contemplados: {sorted(sobran)}"},
-            status_code=400
-        )
-    if no_index:
-        # Asegurarnos de que todos los archivos esperados y subidos tengan al menos una entrada 'keep' en el índice
-        return JSONResponse(
-            {"error": f"Faltan entradas 'keep' en el índice para estos archivos subidos: {sorted(no_index)}. Asegúrate de que cada archivo esperado tenga al menos una columna marcada como 'Keep'."},
-            status_code=400
-        )
+        advertencias.append(
+            f"ADVERTENCIA: Se subieron archivos no listados en el índice: {sorted(sobran)}. No serán procesados.")
 
-    # Limpiar DataFrames procesados anteriores antes de empezar
-    _processed_dfs.clear()
-    resultados = []
-    errores_procesamiento = []
+    # Validar que todos los archivos subidos Y esperados (que sí se subieron)
+    # tengan al menos una entrada 'keep' en el índice para poder ser procesados.
+    # Los archivos subidos que estaban en 'expected' pero no tienen 'keep'
+    # tampoco pueden ser procesados, pero no es un error fatal si no los quieres.
+    # Mantenemos esta validación pero la convertimos en advertencia si la lista 'expected'
+    # se deriva del índice y cubre todos los archivos mencionados.
+    # Si usamos una lista 'expected' fija (como antes), esta validación tiene más sentido.
+    # Asumimos que la lista 'expected' se deriva ahora del índice para mayor flexibilidad.
 
-    # 4) Procesar cada (archivo, hoja) según rename_dict y drop_set
-    # Iterar sobre las combinaciones archivo/hoja definidas en el índice
+    # 4) Procesar *solamente* los (archivo, hoja) definidos en rename_dict *que sí fueron subidos*
+    # Iterar sobre las combinaciones archivo/hoja definidas en el índice con acción 'keep'
+    archivos_procesados_con_exito = set()  # Para llevar un control
+
     for (archivo, hoja), mapeo in rename_dict.items():
+        # Solo intentar procesar si el archivo esperado fue realmente subido
+        if archivo not in uploaded:
+            # Ya se añadió una advertencia general si faltan archivos esperados
+            continue
+
         raw = _saved_files.get(archivo)
-        # Esta validación ya se hizo arriba, pero no está de más
+        # Esta validación adicional no debería ser necesaria si el filtro anterior funciona, pero es segura
         if raw is None:
-            # Este caso no debería ocurrir si las validaciones previas fueron correctas,
-            # pero lo dejamos como salvaguarda.
-            errores_procesamiento.append({
-                "archivo": archivo,
-                "hoja":     hoja,
-                "error":   "Archivo no subido (error de lógica interna o validación previa fallida)"
-            })
+            advertencias.append(
+                f"ADVERTENCIA: Archivo '{archivo}' listado en el índice para procesar (hoja '{hoja}') fue inesperadamente no encontrado en memoria. No se procesará esta combinación.")
             continue
 
         try:
             # Leer solo la hoja especificada
             df = pd.read_excel(io.BytesIO(raw), sheet_name=hoja)
 
-            # Drop de columnas
+            # Drop de columnas (solo si existen en el DF)
             to_drop = [col for (a, h, col) in drop_set if a ==
                        archivo and h == hoja]
-            # Solo intentar dropear si hay columnas para dropear Y si existen en el DF
             cols_to_actually_drop = [
                 col for col in to_drop if col in df.columns]
             if cols_to_actually_drop:
-                # Quitamos errors="ignore" para ser más estrictos si la columna a dropear del índice no existe en el archivo/hoja
                 df = df.drop(columns=cols_to_actually_drop)
+            # else:
+                # Opcional: advertencia si hay columnas en el índice para dropear pero no existen en el archivo
+                # for col in to_drop:
+                #      if col not in df.columns:
+                #           advertencias.append(f"Columna '{col}' listada para eliminar en indice.xlsx para '{archivo}' hoja '{hoja}' no encontrada en el archivo.")
 
-            # Rename de columnas keep
-            # Crear un mapeo que solo contenga columnas que realmente existen en el DF
+            # Rename de columnas keep (solo si existen en el DF)
             actual_mapeo = {orig_col: new_col for orig_col,
                             new_col in mapeo.items() if orig_col in df.columns}
             if actual_mapeo:
                 df.rename(columns=actual_mapeo, inplace=True)
+            # else:
+                # Opcional: advertencia si hay columnas en el índice para keep/rename pero no existen en el archivo
+                # for col in mapeo.keys():
+                #      if col not in df.columns:
+                #           advertencias.append(f"Columna '{col}' listada para mantener/renombrar en indice.xlsx para '{archivo}' hoja '{hoja}' no encontrada en el archivo.")
 
-            # ===>>> PASO CLAVE: GUARDAR EL DATAFRAME PROCESADO <<<===
-            # Usamos el nombre del archivo (sin la extensión .xlsx) como clave, o una combinación si es necesario
-
-            base_filename = archivo.replace(".xlsx", "")
-            # Si el índice indica que un archivo tiene múltiples hojas relevantes, necesitarás una clave única.
-            # Ejemplo: _processed_dfs[f"{base_filename}_{hoja}"] = df
-
+            # ===>>> GUARDAR EL DATAFRAME PROCESADO <<<===
+            # Usamos el nombre del archivo (sin la extensión) como clave
+            base_filename = archivo.replace(".xlsx", "").replace(".xslx", "")
+            # Si un archivo tiene múltiples hojas relevantes según el índice,
+            # necesitarás una clave única que incluya el nombre de la hoja,
+            # por ejemplo: f"{base_filename}_{hoja}"
+            # Si cada archivo tiene solo UNA hoja relevante:
             _processed_dfs[base_filename] = df
 
             resultados.append({
-                "archivo":   archivo,
-                "hoja":      hoja,
-                "status":   "Procesado exitosamente",
-                "columns":   df.columns.tolist(),  # Mostrar columnas después de drop/rename
+                "archivo":   archivo,
+                "hoja":      hoja,
+                "status":   "Procesado exitosamente",
+                "columns":   df.columns.tolist(),
                 "row_count": len(df)
             })
+            archivos_procesados_con_exito.add(archivo)
+
         except Exception as e:
-            # Capturar errores específicos de pandas si es posible, o dejar Exception general
-            errores_procesamiento.append({
+            # Capturar errores durante el procesamiento de un archivo/hoja específico
+            advertencias.append({
                 "archivo": archivo,
-                "hoja":    hoja,
-                "error":   f"Error durante el procesamiento con Pandas: {str(e)}"
+                "hoja":    hoja,
+                "error":   f"Error durante el procesamiento con Pandas: {str(e)}"
             })
 
-     # 5) Devolver resultados (incluyendo errores de procesamiento si hubo)
-    response_content: Dict[str, Any] = {"resultados": resultados}
-    if errores_procesamiento:
-        response_content["advertencias_o_errores_procesamiento"] = errores_procesamiento
-        # Podrías cambiar el código de estado si consideras que un error de procesamiento es fatal
-        # return JSONResponse(response_content, status_code=500)
+    # 5) Reportar archivos esperados que no pudieron ser procesados (si aplica)
+    # Estos son los archivos listados en 'expected' que no están en 'uploaded'
+    for archivo_faltante in archivos_faltantes_no_procesables:
+        # Ya se agregó una advertencia general arriba
+        pass  # No hacemos nada específico aquí, ya se reportó
 
-    # En este punto, los DataFrames limpios están en _processed_dfs
-    # Ejemplo de cómo ver qué DFs están disponibles (solo para depuración si quieres)
-    # print("DataFrames procesados disponibles:", _processed_dfs.keys())
+    # Reportar archivos subidos que no fueron listados en el índice (si aplica)
+    for archivo_sobrante in archivos_sobrantes_no_procesables:
+        # Ya se agregó una advertencia general arriba
+        pass  # No hacemos nada específico aquí, ya se reportó
 
+    # 6) Devolver resultados y advertencias
+    response_content: Dict[str, Any] = {"resultados_procesamiento": resultados}
+    if advertencias:
+        response_content["advertencias_o_errores"] = advertencias
+
+    # Considerar un código de estado 200 OK incluso si hay advertencias,
+    # ya que el proceso no se detuvo por completo.
+    # Si la falta de archivos críticos debe dar error, tendrías que
+    # añadir validación específica para esos nombres de archivo aquí.
     return JSONResponse(response_content, status_code=200)
 
 

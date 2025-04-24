@@ -14,63 +14,83 @@ _saved_files: dict[str, bytes] = {}
 # Almacena los DataFrames de Pandas procesados y limpios
 _processed_dfs: dict[str, pd.DataFrame] = {}
 
+# --- Función corregida save_insight_to_airtable ---
+
 
 def save_insight_to_airtable(question_key: str, answer_value: Any, units: str, dimensions: Dict[str, Any]) -> bool:
-    # Leer credenciales y IDs de variables de entorno
-    airtable_api_key = os.environ.get(
-        "patmRwWGwNYdpVgMG.9b420310505f56d05ac7411c90a04cfe00e2ed0357bc71b9778175892bb19a46")
-    airtable_base_id = os.environ.get("appvASVrlXs3icJ7v")
-    airtable_table_id = os.environ.get("tblfEBo51RvYHQzU6")
+    """
+    Guarda un insight en la tabla de Airtable.
+
+    Args:
+        question_key: La pregunta clave estandarizada del insight (string).
+        answer_value: El valor calculado del insight (puede ser int, float, string, etc.).
+        units: Las unidades del valor (ej: "pacientes", "%", "MXN").
+        dimensions: Un diccionario con el contexto del insight (ej: {"Mes": "2024-03", "Sucursal": "Medellín"}).
+
+    Returns:
+        True si el guardado fue exitoso, False en caso contrario.
+    """
+    # === CORRECCIÓN: Leer los NOMBRES de las variables de entorno ===
+    airtable_api_key = os.environ.get("AIRTABLE_API_KEY")
+    airtable_base_id = os.environ.get("AIRTABLE_BASE_ID")
+    airtable_table_id = os.environ.get("AIRTABLE_TABLE_ID")
 
     if not airtable_api_key or not airtable_base_id or not airtable_table_id:
-        print("Error: Faltan variables de entorno de Airtable (AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_ID). No se guardará el insight.")
+        # Mejorar el mensaje de error para que sea más claro
+        print("Error de configuración de Airtable: Faltan una o más variables de entorno ('AIRTABLE_API_KEY', 'AIRTABLE_BASE_ID', 'AIRTABLE_TABLE_ID').")
+        # No retornar False y continuar, sino retornar un error más claro si no hay credenciales
+        # O, si queremos que el endpoint calculate_insights_endpoint maneje esto, podríamos lanzar una excepción
+        # Por ahora, seguimos con el retorno False, pero el print es mejor.
         return False
+
     # La URL de la API de Airtable para crear registros
-    # https://api.airtable.com/v0/[Base ID]/[Table ID]
     airtable_url = f"https://api.airtable.com/v0/{airtable_base_id}/{airtable_table_id}"
 
-    # Los datos a enviar a Airtable deben estar en un formato específico:
-    # {"records": [{"fields": {"NombreCampo1": "Valor1", "NombreCampo2": "Valor2", ...}}]}
-    # Los nombres de los campos ("NombreCampo1", "NombreCampo2") deben coincidir *exactamente*
-    # con los nombres de las columnas en tu tabla de Airtable.
-    # Recuerda que configuramos la tabla con campos como 'Pregunta_Clave', 'Respuesta_Calculada', 'Unidades', 'Dimensiones', etc.
+    # Convertir el diccionario de dimensiones a string JSON
+    # Asegurarse de que el campo 'Dimensiones' en Airtable sea de tipo 'Long text' para almacenar esto
+    try:
+        dimensions_json_string = json.dumps(dimensions)
+    except Exception as e:
+        print(f"Error al serializar dimensiones a JSON string: {e}")
+        advertencias.append(
+            f"Error al serializar dimensiones a JSON string: {e}. El insight se guardará sin dimensiones.")
+        dimensions_json_string = "{}"  # Guardar un objeto JSON vacío si falla
 
-    # Convertir el diccionario de dimensiones a string JSON para guardarlo en un campo de texto largo
-    # Si en Airtable el campo 'Dimensiones' es de tipo 'Long text' o similar donde guardas JSON.
-    import json
-    dimensions_json_string = json.dumps(dimensions)
-
+    # Preparar los datos en el formato que Airtable espera
+    # Asegurarse de que los nombres de los campos ('Pregunta_Clave', etc.) coincidan exactamente con Airtable
     data = {
         "records": [
             {
                 "fields": {
                     "Pregunta_Clave": question_key,
-                    # Convertir el valor a string para mayor compatibilidad
+                    # Decidir cómo enviar Respuesta_Calculada: como string (seguro) o número (si el campo es Number)
+                    # Si el campo en Airtable es Number, elimina str()
+                    # Enviando como string por seguridad
                     "Respuesta_Calculada": str(answer_value),
                     "Unidades": units,
                     "Dimensiones": dimensions_json_string,
-                    # Guardar la fecha actual en formato ISO 8601
                     "Fecha_Calculo": date.today().isoformat(),
                     "Origen_Datos": "Pandas Precalculado"
-                    # Puedes añadir aquí el campo 'Codigo_Generado' si aplicara (aunque para precalculados no es necesario)
                 }
             }
         ]
     }
 
-    # Headers para la solicitud HTTP, incluyendo la autenticación con la API Key
+    # Headers para la solicitud HTTP
     headers = {
         "Authorization": f"Bearer {airtable_api_key}",
         "Content-Type": "application/json"
     }
 
     try:
-        # Realizar la solicitud POST a la API de Airtable
+        # Realizar la solicitud POST
         response = requests.post(airtable_url, headers=headers, json=data)
 
-        # Verificar si la solicitud fue exitosa (códigos de estado 2xx)
-        # Esto lanzará una excepción para códigos de error HTTP (4xx o 5xx)
-        response.raise_for_status()
+        # Verificar si la solicitud fue exitosa
+        response.raise_for_status()  # Lanza HTTPError para 4xx/5xx respuestas
+
+        # Opcional: Imprimir la respuesta de Airtable para depuración
+        # print("Respuesta de Airtable:", response.json())
 
         print(
             f"Insight guardado exitosamente en Airtable para '{question_key}'.")
@@ -78,11 +98,13 @@ def save_insight_to_airtable(question_key: str, answer_value: Any, units: str, d
 
     except requests.exceptions.RequestException as e:
         print(
-            f"Error al guardar insight en Airtable para '{question_key}': {e}")
+            f"Error HTTP al guardar insight en Airtable para '{question_key}': {e}")
+        # Podrías añadir más detalles del error HTTP aquí: e.response.text
+        # print(f"Respuesta de error de Airtable: {e.response.text}")
         return False
     except Exception as e:
         print(
-            f"Ocurrió un error inesperado al intentar guardar en Airtable: {e}")
+            f"Ocurrió un error inesperado en la función de guardar en Airtable: {e}")
         return False
 
 
@@ -405,44 +427,49 @@ async def process_files_endpoint():
 @app.post("/calculate-insights/")
 async def calculate_insights_endpoint():
     """
-    Endpoint para calcular los insights predefinidos.
+    Endpoint para calcular los insights predefinidos y guardarlos en Airtable.
     Requiere que los archivos hayan sido subidos y procesados previamente.
     """
-    # Verificar si hay datos procesados disponibles en la variable global
+    # Asegúrate de que advertencias está definido si lo usas en save_insight_to_airtable para serialización JSON
+    advertencias = []  # Asegurarse de que esta lista existe para acumular mensajes
+
     if not _processed_dfs:
         return JSONResponse({"error": "No hay datos procesados disponibles. Por favor, suba y procese los archivos primero."}, status_code=400)
 
-    # === Calcular el primer insight llamando a la función ===
-    # Le pasamos el diccionario _processed_dfs a la función para que acceda a los DataFrames
-    pacientes_nuevos_atendidos = calcular_pacientes_nuevos_atendidos(
+    # === Calcular el primer insight ===
+    # === CORRECCIÓN: Asignar el resultado a la variable correcta ===
+    pacientes_nuevos_atendidos_count = calcular_pacientes_nuevos_atendidos(
         _processed_dfs)
 
+    # Definir los datos del insight para guardarlos en Airtable
     question_key = "Cantidad total de pacientes nuevos atendidos"
+    # === CORRECCIÓN: Usar la variable con el resultado correcto ===
     answer_value = pacientes_nuevos_atendidos_count
     units = "pacientes"
-    # Las dimensiones por ahora están vacías ya que es un total general,
-    # pero si calcularas por mes/sucursal, las pondrías aquí:
-    # dimensions = {"Mes": "Marzo 2024", "Sucursal": "Medellín"}
-    dimensions = {}  # Vacío para el total general
+    dimensions = {}
 
     # === Guardar el insight en Airtable ===
     # Llamar a la función de guardado
+    # Podríamos pasar la lista de advertencias a la función de guardado si queremos que sus errores
+    # se reporten en la respuesta final del endpoint, pero por ahora solo imprime errores internos.
     guardado_exitoso = save_insight_to_airtable(
         question_key, answer_value, units, dimensions)
 
     # Puedes añadir lógica aquí para ver si se guardó correctamente y reportarlo en la respuesta
 
     # === Puedes añadir aquí más cálculos de insights y guardarlos ===
-    # Por ejemplo, si quisieras calcular por sucursal:
-    # insights_por_sucursal = calcular_pacientes_nuevos_atendidos_por_sucursal(_processed_dfs)
-    # Luego iterar sobre los resultados y guardarlos individualmente o en batch en Airtable
 
     # Devolver el resultado y si se guardó o no (opcional)
-    return JSONResponse({
-        "status": "Insights calculados y guardados (si la configuración de Airtable es correcta)",
+    response_content = {
+        "status": "Insights calculados",
         "insight_pacientes_nuevos_atendidos": answer_value,
         "guardado_en_airtable_exitoso": guardado_exitoso
-    })
+    }
+
+    # Si hubo advertencias durante el cálculo o guardado (si modificas las funciones para retornarlas)
+    # response_content["advertencias"] = advertencias # Esto requiere modificar las funciones para acumular y retornar advertencias
+
+    return JSONResponse(response_content, status_code=200)
 
 
 @app.post("/slack")

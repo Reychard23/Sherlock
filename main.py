@@ -177,7 +177,7 @@ async def process_files_endpoint():
         "Citas_Motivo.xlsx",
         "Citas_Pacientes.xlsx",
         "Presupuesto por Accion.xlsx",
-        "Respuesta_Encuestas.xlsx",
+        "Respuestas_Encuestas.xlsx",
         "Tratamiento Generado Mex.xlsx",
         "Tabla Gastos Aliadas Mexico.xlsx",
         "Movimiento.xlsx",
@@ -259,14 +259,11 @@ async def process_files_endpoint():
 
             # ===>>> PASO CLAVE: GUARDAR EL DATAFRAME PROCESADO <<<===
             # Usamos el nombre del archivo (sin la extensión .xlsx) como clave, o una combinación si es necesario
-            # Si un archivo tiene varias hojas que se procesan, podríamos usar una clave como "nombre_archivo_nombre_hoja"
-            # Por ahora, si cada archivo tiene solo una hoja relevante (según tu índice), el nombre del archivo es suficiente.
-            # Si un archivo tuviera múltiples hojas relevantes, tendrías que ajustar esto para evitar sobrescribir.
-            # Asumiendo 1 hoja relevante por archivo por ahora, usamos el nombre base:
+
             base_filename = archivo.replace(".xlsx", "")
             # Si el índice indica que un archivo tiene múltiples hojas relevantes, necesitarás una clave única.
             # Ejemplo: _processed_dfs[f"{base_filename}_{hoja}"] = df
-            # Si estás seguro que cada archivo subido solo tiene UNA hoja relevante según tu índice:
+
             _processed_dfs[base_filename] = df
 
             resultados.append({

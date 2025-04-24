@@ -374,16 +374,58 @@ async def calculate_insights_endpoint():
 
 @app.post("/slack")
 async def slack_command(request: Request):
-    # ... (código de este endpoint para Slack) ...
+    """
+    Endpoint activado por el comando /sherlock en Slack.
+    Recibe la pregunta del usuario y la envía a Make para procesar el árbol de decisiones.
+    """
     form_data = await request.form()
     print("Payload recibido:", form_data)
+
+    # Slack envía la pregunta en el campo 'text' del form_data
     user_question = form_data.get("text")
+    if not user_question:
+        return JSONResponse({"text": "No recibí tu pregunta. Por favor, intenta de nuevo."}, status_code=200)
 
-    # Lógica del árbol de decisiones empezará aquí
-    # 1. Buscar en Airtable...
-    # 2. Si no está, evaluar si se puede calcular con _processed_dfs
-    #    if _processed_dfs:
-    #        # Intentar calcular dinámicamente o solicitar permiso
-    #        pass # Lógica futura
+    # --- Llamar a un Webhook en Make para procesar la pregunta ---
+    # Necesitarás la URL del Webhook de Make para el escenario del árbol de decisiones.
+    # Configuraremos esto en el siguiente paso en Make.
+    # Leer la URL del webhook de Make desde variables de entorno
+    make_webhook_url = os.environ.get("MAKE_SHERLOCK_WEBHOOK_URL")
 
-    return JSONResponse({"text": f"Hola, yo soy Sherlock. Recibí tu pregunta: '{user_question}'. Aún estoy aprendiendo a analizar los datos para responderte."}, status_code=200)
+    if not make_webhook_url:
+        print(
+            "Error: La variable de entorno MAKE_SHERLOCK_WEBHOOK_URL no está configurada.")
+        # Error interno si falta la configuración
+        return JSONResponse({"text": "Sherlock no está configurado correctamente para procesar tu pregunta. Contacta a soporte."}, status_code=500)
+
+    try:
+        # Enviar la pregunta del usuario a Make
+        # Puedes enviar más datos si Make los necesita, como el user_id, channel_id, etc.
+        payload_to_make = {
+            "user_question": user_question,
+            "user_id": form_data.get("user_id"),  # ID del usuario en Slack
+            "channel_id": form_data.get("channel_id")  # ID del canal en Slack
+            # Otros campos relevantes de form_data de Slack
+        }
+
+        # Realizar la solicitud POST al webhook de Make
+        response_from_make = requests.post(
+            make_webhook_url, json=payload_to_make)
+
+        # Verificar si la llamada al webhook fue exitosa (códigos 2xx)
+        response_from_make.raise_for_status()
+
+        # Opcional: Leer la respuesta de Make si el escenario devuelve algo
+        # make_response_data = response_from_make.json() # Si Make devuelve un JSON
+        # print("Respuesta de Make:", make_response_data)
+
+        # Sherlock responderá después a través de Make.
+        # Por ahora, solo confirmamos que la pregunta fue recibida.
+        return JSONResponse({"text": f"Pregunta recibida: '{user_question}'. Sherlock está procesando la respuesta..."}, status_code=200)
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error al llamar al webhook de Make: {e}")
+        return JSONResponse({"text": "Ocurrió un error al enviar tu pregunta a Sherlock para procesamiento."}, status_code=500)
+    except Exception as e:
+        print(f"Ocurrió un error inesperado en el endpoint /slack: {e}")
+        return JSONResponse({"text": "Ocurrió un error interno al procesar tu pregunta."}, status_code=500)

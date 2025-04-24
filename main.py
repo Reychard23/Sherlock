@@ -1,14 +1,94 @@
 from fastapi import FastAPI, Request, File, UploadFile
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
+from typing import Dict, Any
 import pandas as pd
 import io
+from datetime import date
 
 app = FastAPI()
 # Almacena los archivos raw (como los sube Make)
 _saved_files: dict[str, bytes] = {}
 # Almacena los DataFrames de Pandas procesados y limpios
 _processed_dfs: dict[str, pd.DataFrame] = {}
+
+
+def calcular_pacientes_nuevos_atendidos(dataframes: Dict[str, pd.DataFrame]) -> int:
+    """
+    Calcula el número total de pacientes nuevos atendidos.
+    ... (el código completo de la función que te pasé antes) ...
+    """
+    try:
+        # ... (código de la función) ...
+        # 1. Obtener los DataFrames necesarios
+        df_citas_pacientes = dataframes.get("Citas_Pacientes")
+        df_citas_motivo = dataframes.get("Citas_Motivo")
+
+        if df_citas_pacientes is None or df_citas_motivo is None:
+            print(
+                "Error: No se encontraron los DataFrames de Citas_Pacientes o Citas_Motivo en _processed_dfs.")
+            return 0
+
+        # Asegurarse de que las columnas necesarias existan y tengan el tipo de dato correcto si es posible
+        # Es buena práctica validar columnas, pero por ahora asumiremos que el índice las dejó bien
+        # Si tienes problemas, podríamos añadir validaciones aquí.
+
+        # 2. Filtrar citas duplicadas en df_citas_pacientes
+        # Convertir la columna 'Cita duplicada' a tipo numérico o booleano si no lo está
+        # Manejar posibles errores de conversión si los datos crudos no son limpios
+        df_citas_pacientes['Cita duplicada'] = pd.to_numeric(
+            df_citas_pacientes['Cita duplicada'], errors='coerce').fillna(0)
+        # Usar .copy() para evitar SettingWithCopyWarning
+        df_citas_filtradas = df_citas_pacientes[df_citas_pacientes['Cita duplicada'] != 1].copy(
+        )
+
+        # 3. Unir con df_citas_motivo para obtener la Fecha Cita
+        # Nos aseguramos de que las columnas clave tengan el mismo tipo de dato para el merge
+        df_citas_filtradas['ID_Cita'] = df_citas_filtradas['ID_Cita'].astype(
+            str)
+        df_citas_motivo['ID_Cita'] = df_citas_motivo['ID_Cita'].astype(str)
+
+        # Realizar el merge (inner join para solo citas que existen en ambas tablas)
+        # Seleccionar solo las columnas de Citas_Motivo que necesitamos (ID_Cita y Fecha Cita)
+        df_citas_motivo_reduced = df_citas_motivo[[
+            'ID_Cita', 'Fecha Cita']].copy()
+        df_merged = pd.merge(
+            df_citas_filtradas,
+            df_citas_motivo_reduced,
+            on='ID_Cita',
+            how='inner'
+        )
+
+        # Convertir la columna 'Fecha Cita' a tipo datetime
+        df_merged['Fecha Cita'] = pd.to_datetime(
+            df_merged['Fecha Cita'], errors='coerce')
+
+        # Asegurarnos de que Consecutivo_cita sea numérico y Cita_asistida sea booleano/numérico
+        df_merged['Consecutivo_cita'] = pd.to_numeric(
+            # Usar -1 o algún valor para nulos
+            df_merged['Consecutivo_cita'], errors='coerce').fillna(-1)
+        # Asumiendo que Cita_asistida es 0 o 1 o True/False
+        df_merged['Cita_asistida'] = pd.to_numeric(
+            df_merged['Cita_asistida'], errors='coerce').fillna(0).astype(int)
+
+        # 4. Filtrar para obtener solo "Pacientes nuevos atendidos"
+        # Aplicar la primera condición de tu lógica
+        df_pacientes_nuevos_atendidos = df_merged[
+            (df_merged['Consecutivo_cita'] == 1) &
+            (df_merged['Cita_asistida'] == 1)
+        ].copy()  # Usar .copy()
+
+        # 5. Contar pacientes únicos
+        # Contamos el número de IDs únicos en la columna 'ID_Paciente'
+        numero_pacientes_nuevos_atendidos = df_pacientes_nuevos_atendidos['ID_Paciente'].nunique(
+        )
+
+        return numero_pacientes_nuevos_atendidos
+
+    except Exception as e:
+        print(f"Error calculando pacientes nuevos atendidos: {str(e)}")
+        # Dependiendo de cómo quieras manejar errores, podrías lanzar la excepción o registrarla
+        return 0  # Retornar 0 en caso de error
 
 
 @app.get("/")
@@ -218,32 +298,46 @@ async def process_files_endpoint():
     return JSONResponse(response_content, status_code=200)
 
 
+@app.post("/calculate-insights/")
+async def calculate_insights_endpoint():
+    """
+    Endpoint para calcular los insights predefinidos.
+    Requiere que los archivos hayan sido subidos y procesados previamente.
+    """
+    # Verificar si hay datos procesados disponibles en la variable global
+    if not _processed_dfs:
+        return JSONResponse({"error": "No hay datos procesados disponibles. Por favor, suba y procese los archivos primero."}, status_code=400)
+
+    # === Calcular el primer insight llamando a la función ===
+    # Le pasamos el diccionario _processed_dfs a la función para que acceda a los DataFrames
+    pacientes_nuevos_atendidos = calcular_pacientes_nuevos_atendidos(
+        _processed_dfs)
+
+    # Aquí llamarías a otras funciones para calcular otros insights de manera similar:
+    # otro_insight = calcular_otro_insight(_processed_dfs)
+    # ...
+
+    # Por ahora, solo devolvemos el resultado del primer insight
+    # En el futuro, aquí guardarías esto en Airtable y prepararías la respuesta para Slack
+    return JSONResponse({
+        "status": "Insights calculados",
+        "insight_pacientes_nuevos_atendidos": pacientes_nuevos_atendidos
+        # Agregar otros insights aquí en la respuesta
+    })
+
+
 @app.post("/slack")
 async def slack_command(request: Request):
+    # ... (código de este endpoint para Slack) ...
     form_data = await request.form()
     print("Payload recibido:", form_data)
-    # Aquí empezarás a implementar el árbol de decisiones
-    # 1. Parsear la pregunta del usuario
-    # El texto de la pregunta debería estar en el campo 'text'
     user_question = form_data.get("text")
 
-    # 2. Buscar en insights precalculados (requiere Airtable)
-    # result = buscar_insight_en_airtable(user_question)
-    # if result:
-    #     return JSONResponse({"text": result}, status_code=200)
+    # Lógica del árbol de decisiones empezará aquí
+    # 1. Buscar en Airtable...
+    # 2. Si no está, evaluar si se puede calcular con _processed_dfs
+    #    if _processed_dfs:
+    #        # Intentar calcular dinámicamente o solicitar permiso
+    #        pass # Lógica futura
 
-    # 3. Si no se encuentra, evaluar si se puede calcular con datos disponibles
-    # (Necesitarás acceso a _processed_dfs aquí)
-    # can_calculate = evaluar_posibilidad_calculo(user_question, _processed_dfs)
-
-    # 4. Si se puede calcular, solicitar permiso
-    # if can_calculate:
-    #     # Enviar mensaje interactivo a Slack
-    #     return JSONResponse({"text": "¿Puedo calcular eso con la última data cargada? (Sí/No)"}, status_code=200)
-
-    # 5. Si no se puede calcular o el usuario no acepta, dar respuesta por defecto
-    # else:
-    #     return JSONResponse({"text": "Ese dato aún no está disponible ni calculado..."}, status_code=200)
-
-    # Respuesta temporal mientras implementas la lógica del árbol
     return JSONResponse({"text": f"Hola, yo soy Sherlock. Recibí tu pregunta: '{user_question}'. Aún estoy aprendiendo a analizar los datos para responderte."}, status_code=200)

@@ -348,6 +348,7 @@ async def calculate_insights_endpoint():
         _processed_dfs)
 
     # Definir los datos del insight para devolver
+    insight_id = "insight_pacientes_nuevos_atendidos_total"
     question_key = "Cantidad total de pacientes nuevos atendidos"
     answer_value = pacientes_nuevos_atendidos_count
     units = "pacientes"
@@ -361,14 +362,14 @@ async def calculate_insights_endpoint():
     # Simplificamos la respuesta JSON para devolver los datos calculados
     return JSONResponse({
         "status": "Insights calculados exitosamente",
-        "insight_pacientes_nuevos_atendidos": {
+        "calculated_insight": {
+            "insight_id": insight_id,
             "question_key": question_key,
             "answer_value": answer_value,
             "units": units,
-            # Devolvemos las dimensiones (vacías por ahora) por si Make las necesita
+            # Devolvemos las dimensiones (vacías por ahora)
             "dimensions": dimensions
         }
-        # Añadir aquí otros insights calculados si los hubiera
     }, status_code=200)
 
 
@@ -384,7 +385,7 @@ async def slack_command(request: Request):
     # Slack envía la pregunta en el campo 'text' del form_data
     user_question = form_data.get("text")
     if not user_question:
-        return JSONResponse({"text": "No recibí tu pregunta. Por favor, intenta de nuevo."}, status_code=200)
+        return JSONResponse({"text": "Lo siento, mis respuestas son limitadas aún, por favor, intenta de nuevo."}, status_code=200)
 
     # --- Llamar a un Webhook en Make para procesar la pregunta ---
     # Necesitarás la URL del Webhook de Make para el escenario del árbol de decisiones.
@@ -396,7 +397,7 @@ async def slack_command(request: Request):
         print(
             "Error: La variable de entorno MAKE_SHERLOCK_WEBHOOK_URL no está configurada.")
         # Error interno si falta la configuración
-        return JSONResponse({"text": "Sherlock no está configurado correctamente para procesar tu pregunta. Contacta a soporte."}, status_code=500)
+        return JSONResponse({"text": "Sherlock no está configurado correctamente para procesar tu pregunta. Contacta a soporte o a Rich."}, status_code=500)
 
     try:
         # Enviar la pregunta del usuario a Make
@@ -421,11 +422,11 @@ async def slack_command(request: Request):
 
         # Sherlock responderá después a través de Make.
         # Por ahora, solo confirmamos que la pregunta fue recibida.
-        return JSONResponse({"text": f"Pregunta recibida: '{user_question}'. Sherlock está procesando la respuesta..."}, status_code=200)
+        return JSONResponse({"text": f"Pregunta recibida: '{user_question}'. Sherlock está procesando. Un momento por favor..."}, status_code=200)
 
     except requests.exceptions.RequestException as e:
         print(f"Error al llamar al webhook de Make: {e}")
-        return JSONResponse({"text": "Ocurrió un error al enviar tu pregunta a Sherlock para procesamiento."}, status_code=500)
+        return JSONResponse({"text": "Ocurrió un error al enviar tu pregunta a Sherlock para procesamiento. Por favor contacta a Soporte."}, status_code=500)
     except Exception as e:
         print(f"Ocurrió un error inesperado en el endpoint /slack: {e}")
-        return JSONResponse({"text": "Ocurrió un error interno al procesar tu pregunta."}, status_code=500)
+        return JSONResponse({"text": "Ocurrió un error interno al procesar tu pregunta. Por favor contacta a soporte."}, status_code=500)

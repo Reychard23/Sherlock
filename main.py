@@ -251,7 +251,6 @@ async def process_files_endpoint():
                 df.rename(columns=actual_mapeo, inplace=True)
                 print(
                     f"Columnas renombradas para '{archivo}' '{hoja}': {actual_mapeo}")
-
             # ===>>> GUARDAR EL DATAFRAME PROCESADO EN SUPABASE <<<===
             # Generamos un nombre de tabla a partir del nombre del archivo base
             # Puedes definir tu propia convención de nombres si prefieres

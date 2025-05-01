@@ -131,11 +131,9 @@ async def process_files_endpoint():
     aplicando la lógica del índice para limpieza y renombrado.
     *** Guarda los DataFrames procesados en la base de datos de Supabase. ***
     Maneja advertencias si faltan archivos esperados o sobran inesperados.
-    """
-    # === Esto ya NO es necesario ===
-    # _processed_dfs.clear() # Línea removida
-    # ==============================
 
+    *** MODIFICACIÓN TEMPORAL: Procesará solo los primeros N archivos para prueba de rendimiento. ***
+    """
     # Validar si el engine de la base de datos se creó correctamente
     if engine is None:
         return JSONResponse({"error": "No se pudo conectar a la base de datos para procesar los archivos."}, status_code=500)
@@ -146,11 +144,15 @@ async def process_files_endpoint():
     # 1) Leer el índice desde memoria
     raw_index = _saved_files.get("indice.xlsx")
     if raw_index is None:
+        # Limpiar saved_files si el índice no se subió, ya que no se puede procesar nada
+        _saved_files.clear()
         return JSONResponse({"error": "No se subió indice.xlsx. El índice es necesario para procesar."}, status_code=400)
     try:
         indice_df = pd.read_excel(io.BytesIO(raw_index))
         print("indice.xlsx leído exitosamente.")
     except Exception as e:
+        # Limpiar saved_files si el índice no se puede leer
+        _saved_files.clear()
         return JSONResponse({"error": f"Error al leer indice.xlsx: {str(e)}. Asegúrese de que sea un archivo Excel válido."}, status_code=400)
 
     # 2) Construir rename_dict y drop_set
@@ -161,6 +163,8 @@ async def process_files_endpoint():
                      "Columna", "Nombre unificado", "Acción"]
     if not all(col in indice_df.columns for col in required_cols):
         missing = [col for col in required_cols if col not in indice_df.columns]
+        # Limpiar saved_files si el índice tiene columnas faltantes
+        _saved_files.clear()
         return JSONResponse({"error": f"Columnas requeridas faltantes en indice.xlsx: {missing}. Asegúrese de que el archivo índice tenga las columnas correctas."}, status_code=400)
 
     # Procesar filas del índice para construir diccionarios de mapeo y eliminación
@@ -216,27 +220,52 @@ async def process_files_endpoint():
             f"ADVERTENCIA: Se subieron archivos no listados en el índice: {sorted(sobran)}. No serán procesados.")
 
     # 4) Procesar *solamente* los (archivo, hoja) definidos en rename_dict *que sí fueron subidos*
+    # === INICIO DE LA MODIFICACIÓN TEMPORAL PARA PROCESAR SUBSET ===
     archivos_procesados_con_exito = set()
 
-    for (archivo, hoja), mapeo in rename_dict.items():
-        if archivo not in uploaded:
-            continue
+    # Obtenemos una lista de las claves (archivo, hoja) definidas en rename_dict (las que tienen acción 'keep')
+    rename_keys_to_process = list(rename_dict.keys())
 
+    # Filtramos esta lista para incluir solo las claves donde el archivo correspondiente fue realmente subido
+    files_and_sheets_to_actually_attempt = [
+        key for key in rename_keys_to_process if key[0] in uploaded
+    ]
+
+    # >>>>>>>>>> AQUÍ SE SELECCIONAN LOS PRIMEROS 4 ARCHIVOS/HOJAS <<<<<<<<<<
+    # Selecciona solo los primeros 4 elementos de la lista de archivos/hojas que se pueden intentar procesar
+    subset_to_process = files_and_sheets_to_actually_attempt[:4]
+    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    print(
+        f"MODO DE PRUEBA: Procesando solo {len(subset_to_process)} combinaciones de archivo/hoja de un total de {len(files_and_sheets_to_actually_attempt)} posibles (filtrado por archivos subidos).")
+    # === FIN DE LA MODIFICACIÓN TEMPORAL ===
+
+    # === Iterar sobre el subconjunto seleccionado para procesar ===
+    # Este bucle solo se ejecutará para las primeras 4 combinaciones de archivo/hoja que seleccionamos arriba
+    for (archivo, hoja) in subset_to_process:
+
+        # Las acciones de drop y rename se aplican solo si este par (archivo, hoja) está en rename_dict,
+        # lo cual ya garantizamos al iterar sobre subset_to_process que se deriva de rename_dict.
+
+        # Verifica que el archivo raw exista en memoria (debería existir ya que filtramos por 'uploaded')
         raw = _saved_files.get(archivo)
         if raw is None:
+            # Si por alguna razón muy rara el archivo no está, lo reportamos y saltamos
             advertencias.append(
-                f"ADVERTENCIA: Archivo '{archivo}' listado en el índice para procesar (hoja '{hoja}') fue inesperadamente no encontrado en memoria. No se procesará esta combinación.")
+                f"ADVERTENCIA: Archivo '{archivo}' listado para procesar (hoja '{hoja}') fue inesperadamente no encontrado en memoria durante la iteración. No se procesará esta combinación.")
             continue
 
         try:
-            # Leer solo la hoja especificada
+            # Leer solo la hoja especificada del archivo raw
             df = pd.read_excel(io.BytesIO(raw), sheet_name=hoja)
             print(
                 f"Archivo '{archivo}', Hoja '{hoja}' leído exitosamente con Pandas.")
 
-            # Drop de columnas (solo si existen en el DF)
+            # === Aplicar DROP y RENAME basados en el índice ===
+            # Obtener las columnas a eliminar para este archivo y hoja
             to_drop = [col for (a, h, col) in drop_set if a ==
                        archivo and h == hoja]
+            # Filtrar las columnas a eliminar para asegurar que existan en el DataFrame actual
             cols_to_actually_drop = [
                 col for col in to_drop if col in df.columns]
             if cols_to_actually_drop:
@@ -244,46 +273,42 @@ async def process_files_endpoint():
                 print(
                     f"Columnas eliminadas para '{archivo}' '{hoja}': {cols_to_actually_drop}")
 
-            # Rename de columnas keep (solo si existen en el DF)
+            # Obtener el mapeo de nombres para renombrar para este archivo y hoja
+            # Usamos .get(key, {}) para obtener el mapeo o un diccionario vacío si no hay entradas 'keep' para este par (archivo, hoja)
+            mapeo = rename_dict.get((archivo, hoja), {})
+            # Filtrar el mapeo para incluir solo columnas que existan en el DataFrame actual
             actual_mapeo = {orig_col: new_col for orig_col,
                             new_col in mapeo.items() if orig_col in df.columns}
+
             if actual_mapeo:
+                # Renombrar las columnas en el DataFrame
                 df.rename(columns=actual_mapeo, inplace=True)
                 print(
                     f"Columnas renombradas para '{archivo}' '{hoja}': {actual_mapeo}")
+            # =============================================
+
             # ===>>> GUARDAR EL DATAFRAME PROCESADO EN SUPABASE <<<===
-            # Generamos un nombre de tabla a partir del nombre del archivo base
-            # Puedes definir tu propia convención de nombres si prefieres
-            # Quitamos la extensión y caracteres especiales si es necesario.
-            # Pandas .to_sql convertirá el nombre a minúsculas por defecto.
+            # Generamos un nombre de tabla a partir del nombre del archivo base (sin extensión y en minúsculas)
+            # Aquí asumimos que cada archivo procesado con 'keep' en el índice se guarda como una tabla separada.
             table_name = archivo.replace(".xlsx", "").replace(
                 ".xslx", "").lower().replace(" ", "_")
+            # Eliminar caracteres no válidos para nombres de tabla SQL si fuera necesario
+            # table_name = "".join(c for c in table_name if c.isalnum() or c == '_').strip('_') # Ejemplo de limpieza más agresiva
 
             try:
-                # Usamos el engine para conectar y guardar el DataFrame
-                # if_exists='replace' borrará la tabla si existe y la creará de nuevo.
-                # CUIDADO: Esto significa que CADA vez que proceses, se borrarán los datos anteriores
-                # de esa tabla y se reemplazarán con los nuevos del archivo subido.
-                # Para actualizar datos (ej. si Alirio sube la actualización diaria),
-                # necesitaríamos otra lógica (ej. borrar datos por fecha/sucursal y luego insertar,
-                # o usar upsert si la base de datos lo soporta y tienes una clave primaria).
-                # Por ahora, 'replace' es el más simple para empezar.
-                # index=False evita que el índice de Pandas se guarde como columna.
                 print(
                     f"Intentando guardar DataFrame procesado para '{archivo}' '{hoja}' en la tabla '{table_name}' en la base de datos...")
+                # Usamos 'replace'. Esto borrará la tabla si ya existe y la creará de nuevo.
+                # Esto está bien para pruebas o si cada día reemplazas todos los datos.
+                # Para agregar datos diarios a tablas existentes, la lógica debería ser diferente ('append', upsert, etc.)
                 df.to_sql(table_name, con=engine,
                           if_exists='replace', index=False)
                 print(
                     f"DataFrame procesado guardado exitosamente en la tabla '{table_name}'.")
 
-                # === Esto ya NO es necesario ===
-                # _processed_dfs[base_filename] = df # Línea removida
-                # ==============================
-
                 resultados.append({
                     "archivo":    archivo,
                     "hoja":     hoja,
-                    # Mensaje actualizado
                     "status":   f"Procesado y guardado en tabla '{table_name}' exitosamente",
                     "columns":   df.columns.tolist(),
                     "row_count": len(df),
@@ -292,7 +317,7 @@ async def process_files_endpoint():
                 archivos_procesados_con_exito.add(archivo)
 
             except SQLAlchemyError as db_err:
-                # Error específico de la base de datos al guardar
+                # Error específico de la base de datos al guardar (ej. problema con datos, tipos de columna, restricciones)
                 print(
                     f"Error de base de datos al guardar '{archivo}' '{hoja}' en '{table_name}': {db_err}")
                 advertencias.append({
@@ -311,7 +336,7 @@ async def process_files_endpoint():
                 })
 
         except Exception as e:
-            # Capturar errores durante la lectura inicial del Excel
+            # Capturar errores durante la lectura inicial del Excel (antes de drop/rename)
             print(
                 f"Error al leer el archivo Excel '{archivo}' hoja '{hoja}': {e}")
             advertencias.append({
@@ -321,19 +346,25 @@ async def process_files_endpoint():
             })
 
     # 5) Reportar archivos esperados que no pudieron ser procesados (si aplica)
-    for archivo_faltante in archivos_faltantes_no_procesables:
-        pass  # Ya se añadió una advertencia general arriba
+    # Estas advertencias ya se añadieron antes de empezar a iterar.
+    pass  # No hacemos nada específico aquí.
 
-    # Reportar archivos subidos que no fueron listados en el índice (si aplica)
-    for archivo_sobrante in archivos_sobrantes_no_procesables:
-        pass  # Ya se añadió una advertencia general arriba
+    # 6) Limpiar los archivos raw de la memoria una vez procesados
+    # Es buena práctica limpiar la memoria de los archivos crudos después de procesarlos
+    # para liberar recursos, especialmente si son grandes.
+    _saved_files.clear()
+    print("Archivos raw limpiados de la memoria después del procesamiento.")
 
-    # 6) Devolver resultados y advertencias
+    # 7) Devolver resultados y advertencias
     response_content: Dict[str, Any] = {"resultados_procesamiento": resultados}
     if advertencias:
         response_content["advertencias_o_errores"] = advertencias
-
-    return JSONResponse(response_content, status_code=200)
+        # Considerar un status_code diferente (ej. 200 con advertencias, 400 si hay errores fatales)
+        # Por ahora, devolvemos 200 OK incluso con advertencias
+        return JSONResponse(response_content, status_code=200)
+    else:
+        # Si no hay advertencias, todo salió según lo planeado para los archivos procesados.
+        return JSONResponse(response_content, status_code=200)
 
 
 @app.post("/calculate-insights/")

@@ -364,7 +364,13 @@ async def process_files_endpoint():
                 # Usamos comillas dobles alrededor de los nombres de columna por si acaso
                 # usamos nombres con espacios o caracteres especiales que SQL requiera escapar.
                 # El `VALUES %s` es el formato esperado por execute_values para la lista de tuplas.
-                insert_sql = f"INSERT INTO {table_name} ({', '.join([f'"{col}"' for col in columns])}) VALUES %s"
+                # Formateamos los nombres de columna para la sentencia SQL, encerrándolos en comillas dobles
+                # Esto ayuda si los nombres de columna tienen espacios o caracteres especiales
+                quoted_columns = [f'"{col}"' for col in columns]
+                # Unimos los nombres de columna formateados con ', '
+                columns_sql_string = ', '.join(quoted_columns)
+                # Construimos la sentencia INSERT final usando la cadena de columnas formateada
+                insert_sql = f"INSERT INTO {table_name} ({columns_sql_string}) VALUES %s"
 
                 # Obtener una conexión cruda de psycopg2 desde el pool de SQLAlchemy y usar un cursor.
                 # Usamos 'with' para asegurar que la conexión y el cursor se manejen correctamente.

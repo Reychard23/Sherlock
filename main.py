@@ -1,14 +1,14 @@
-from fastapi import FastAPI, Request, File, UploadFile
-from fastapi.responses import JSONResponse
-from typing import List, Dict, Any
-from typing import Dict, Any
 import pandas as pd
 import io
-from datetime import date
 import os
 import requests
 import json
 import psycopg2.extras
+import zipfile  # Importar la librería zipfile
+from fastapi import FastAPI, Request, File, UploadFile, Form  # Importar Form
+from fastapi.responses import JSONResponse
+from typing import List, Dict, Any
+from typing import Dict, Any
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -124,68 +124,82 @@ async def upload_excel(files: List[UploadFile] = File(...)):
 
 
 @app.post("/process-all-files/")
-async def process_all_files_endpoint(files: List[UploadFile] = File(...)):
+# Espera un solo archivo tipo File
+async def process_all_files_endpoint(zip_file: UploadFile = File(...)):
     """
-    Endpoint único para recibir todos los archivos Excel necesarios
-    y procesarlos, incluyendo el índice, y guardar en la base de datos.
-    Recibe una lista de archivos (debería incluir indice.xlsx y los datos).
-
-    *** Conserva la MODIFICACIÓN TEMPORAL de procesar solo los primeros 4 archivos para la prueba de rendimiento. ***
+    Endpoint para recibir un archivo ZIP con todos los archivos Excel dentro,
+    descomprimirlo en memoria y procesar los archivos, incluyendo el índice.
+    Espera UN solo archivo UploadFile que es el ZIP.
     """
     # Validar si el engine de la base de datos se creó correctamente
     if engine is None:
-        # Limpiamos saved_files si no podemos procesar
-        # (Aunque en este endpoint los archivos vienen en la request, la variable _saved_files
-        # se usa para consistencia interna al pasar datos a la lógica de procesamiento)
         _saved_files.clear()
         return JSONResponse({"error": "No se pudo conectar a la base de datos para procesar los archivos."}, status_code=500)
 
-    # Limpiamos saved_files al inicio para asegurarnos de que solo tenemos los archivos de esta solicitud
+    # Limpiamos saved_files al inicio para asegurarnos de que solo tenemos los archivos del ZIP
     _saved_files.clear()
 
     resultados = []
     advertencias = []
-    raw_index = None  # Variable para guardar el contenido del indice.xlsx si se sube
+    raw_index = None
 
-    # Primero, guardamos todos los archivos recibidos en _saved_files y encontramos el indice.xlsx
-    print(f"Recibidos {len(files)} archivos para procesar.")
-    for file in files:
-        try:
-            data = await file.read()
-            # Guardamos el contenido en memoria
-            _saved_files[file.filename] = data
-            if file.filename.lower() == "indice.xlsx":
-                raw_index = data  # Identificamos el archivo indice.xlsx
-            resultados.append({
-                "filename": file.filename,
-                "status": "Archivo recibido y guardado en memoria para procesamiento"
-            })
-        except Exception as e:
-            # Si falla la lectura de un archivo, lo reportamos pero intentamos continuar con los otros
-            advertencias.append({
-                "filename": file.filename,
-                "error": f"Error al leer el contenido del archivo: {str(e)}"
-            })
+    print(f"Recibido archivo: {zip_file.filename}")
 
-    # Verificamos si el indice.xlsx fue subido
-    if raw_index is None:
-        # Limpiamos saved_files ya que sin índice no se puede procesar
-        _saved_files.clear()
-        return JSONResponse({"error": "No se subió indice.xlsx. El índice es necesario para procesar."}, status_code=400)
-
-    # El resto de la lógica es la misma que antes estaba en /process-excel/
-    # === La lógica para leer indice.xlsx, construir rename_dict, drop_set,
-    #     validar archivos, seleccionar subset y el bucle de procesamiento
-    #     CON EL GUARDADO EN DB USANDO execute_values AQUI ABAJO ===
-
+    # === Descomprimir el archivo ZIP en memoria ===
     try:
-        indice_df = pd.read_excel(io.BytesIO(raw_index))
-        print("indice.xlsx leído exitosamente.")
+        zip_content = await zip_file.read()  # Leer el contenido binario del ZIP
+        # Usamos io.BytesIO para tratar el contenido binario como un archivo en memoria
+        with zipfile.ZipFile(io.BytesIO(zip_content), 'r') as zip_ref:
+            print(
+                f"Archivo ZIP '{zip_file.filename}' abierto. Contiene {len(zip_ref.namelist())} archivos.")
+            # Iterar sobre cada archivo dentro del ZIP
+            for filename_in_zip in zip_ref.namelist():
+                # Procesar solo archivos Excel
+                if filename_in_zip.endswith(('.xlsx', '.xls')):
+                    try:
+                        with zip_ref.open(filename_in_zip) as excel_file_in_zip:
+                            # Leemos el contenido de cada archivo Excel dentro del ZIP
+                            data = excel_file_in_zip.read()
+                            # Guardamos el contenido en nuestra variable en memoria
+                            _saved_files[filename_in_zip] = data
+                            print(
+                                f"Archivo '{filename_in_zip}' extraído del ZIP.")
+                            # Identificamos el archivo indice.xlsx (ignorando case)
+                            if filename_in_zip.lower() == "indice.xlsx":
+                                raw_index = data
+
+                    except Exception as e:
+                        advertencias.append({
+                            "filename_in_zip": filename_in_zip,
+                            "error": f"Error al extraer o leer archivo del ZIP: {str(e)}"
+                        })
+
+    except zipfile.BadZipFile:
+        _saved_files.clear()
+        return JSONResponse({"error": "El archivo subido no es un archivo ZIP válido."}, status_code=400)
     except Exception as e:
         _saved_files.clear()
-        return JSONResponse({"error": f"Error al leer indice.xlsx: {str(e)}. Asegúrese de que sea un archivo Excel válido."}, status_code=400)
+        return JSONResponse({"error": f"Error al procesar el archivo ZIP: {str(e)}"}, status_code=500)
+    # === Fin de la descompresión del ZIP ===
 
-    # 2) Construir rename_dict y drop_set (copiar desde el endpoint anterior)
+    # Verificamos si el indice.xlsx fue encontrado dentro del ZIP
+    if raw_index is None:
+        _saved_files.clear()
+        return JSONResponse({"error": "No se encontró indice.xlsx dentro del archivo ZIP subido."}, status_code=400)
+
+    # Ahora _saved_files contiene los contenidos de los archivos Excel extraídos del ZIP.
+    # La lógica restante es la misma que antes.
+
+    # 1) Leer el índice desde memoria (ya tenemos raw_index del ZIP)
+    try:
+        # raw_index ya fue leído del ZIP
+        indice_df = pd.read_excel(io.BytesIO(raw_index))
+        print("indice.xlsx leído exitosamente desde el ZIP.")
+    except Exception as e:
+        _saved_files.clear()
+        return JSONResponse({"error": f"Error al leer indice.xlsx desde el ZIP: {str(e)}. Asegúrese de que sea un archivo Excel válido dentro del ZIP."}, status_code=400)
+
+    # 2) Construir rename_dict y drop_set (copiar lógica)
     rename_dict: dict[tuple[str, str], dict[str, str]] = {}
     drop_set: set[tuple[str, str, str]] = set()
 
@@ -194,13 +208,13 @@ async def process_all_files_endpoint(files: List[UploadFile] = File(...)):
     if not all(col in indice_df.columns for col in required_cols):
         missing = [col for col in required_cols if col not in indice_df.columns]
         _saved_files.clear()
-        return JSONResponse({"error": f"Columnas requeridas faltantes en indice.xlsx: {missing}. Asegúrese de que el archivo índice tenga las columnas correctas."}, status_code=400)
+        return JSONResponse({"error": f"Columnas requeridas faltantes en indice.xlsx: {missing}. Asegúrese de que el archivo índice dentro del ZIP tenga las columnas correctas."}, status_code=400)
 
     for idx, row in indice_df.iterrows():
         try:
             if pd.isna(row["Archivo"]) or pd.isna(row["Sheet"]) or pd.isna(row["Columna"]) or pd.isna(row["Nombre unificado"]) or pd.isna(row["Acción"]):
                 advertencias.append(
-                    f"Fila {idx+2} en indice.xlsx contiene valores faltantes en columnas clave y será ignorada.")
+                    f"Fila {idx+2} en indice.xlsx (dentro del ZIP) contiene valores faltantes en columnas clave y será ignorada.")
                 continue
 
             archivo = str(row["Archivo"]).strip()
@@ -211,7 +225,7 @@ async def process_all_files_endpoint(files: List[UploadFile] = File(...)):
 
             if not archivo or not hoja or not orig or not accion:
                 advertencias.append(
-                    f"Fila {idx+2} en indice.xlsx tiene campos vacíos después de limpiar y será ignorada.")
+                    f"Fila {idx+2} en indice.xlsx (dentro del ZIP) tiene campos vacíos después de limpiar y será ignorada.")
                 continue
 
             key = (archivo, hoja)
@@ -222,21 +236,21 @@ async def process_all_files_endpoint(files: List[UploadFile] = File(...)):
                     rename_dict[key] = {}
                 if not nuevo:
                     advertencias.append(
-                        f"Fila {idx+2} en indice.xlsx tiene acción 'keep' para columna '{orig}' pero el 'Nombre unificado' está vacío. Esta columna no se renombrará.")
+                        f"Fila {idx+2} en indice.xlsx (dentro del ZIP) tiene acción 'keep' para columna '{orig}' pero el 'Nombre unificado' está vacío. Esta columna no se renombrará.")
                     rename_dict[key][orig] = orig
                 else:
                     rename_dict[key][orig] = nuevo
             else:
                 advertencias.append(
-                    f"Fila {idx+2} en indice.xlsx tiene acción '{accion}' no reconocida para columna '{orig}' en archivo '{archivo}' hoja '{hoja}'. La fila será ignorada.")
+                    f"Fila {idx+2} en indice.xlsx (dentro del ZIP) tiene acción '{accion}' no reconocida para columna '{orig}' en archivo '{archivo}' hoja '{hoja}'. La fila será ignorada.")
         except Exception as e:
             advertencias.append(
-                f"Error procesando fila {idx+2} en indice.xlsx: {str(e)}. Fila: {row.to_dict()}.")
+                f"Error procesando fila {idx+2} en indice.xlsx (dentro del ZIP): {str(e)}. Fila: {row.to_dict()}.")
 
-    # 3) Validar contra la lista esperada de archivos Y los archivos subidos (ahora son los archivos recibidos)
+    # 3) Validar contra la lista esperada de archivos Y los archivos recibidos del ZIP
     expected = {archivo for (archivo, _) in rename_dict.keys()}
     expected.update({archivo for (archivo, _, _) in drop_set})
-    # 'uploaded' son ahora los nombres de archivo que recibimos en la request, menos el indice
+    # 'uploaded' son ahora los nombres de archivo que extrajimos del ZIP, menos el indice
     uploaded = set(_saved_files.keys()) - {"indice.xlsx"}
 
     faltan = expected - uploaded
@@ -247,40 +261,42 @@ async def process_all_files_endpoint(files: List[UploadFile] = File(...)):
 
     if faltan:
         advertencias.append(
-            f"ADVERTENCIA: No se subieron estos archivos esperados (listados en el índice): {sorted(faltan)}. No podrán ser procesados.")
+            f"ADVERTENCIA: No se encontraron estos archivos esperados (listados en el índice) dentro del ZIP: {sorted(faltan)}. No podrán ser procesados.")
     if sobran:
         advertencias.append(
-            f"ADVERTENCIA: Se subieron archivos no listados en el índice: {sorted(sobran)}. No serán procesados.")
+            f"ADVERTENCIA: Se encontraron archivos dentro del ZIP no listados en el índice: {sorted(sobran)}. No serán procesados.")
 
-    # 4) Procesar *solamente* los (archivo, hoja) definidos en rename_dict *que sí fueron subidos/recibidos*
-    # === INICIO DE LA SELECCIÓN DEL SUBSET Y LOGICA DE execute_values (Copiar desde el endpoint anterior) ===
+    # 4) Procesar *solamente* los (archivo, hoja) definidos en rename_dict *que sí fueron extraídos del ZIP*
+    # === INICIO DE LA SELECCIÓN DEL SUBSET Y LOGICA DE execute_values (Copiar lógica) ===
     archivos_procesados_con_exito = set()
 
     rename_keys_to_process = sorted(list(rename_dict.keys()))
 
+    # Filtramos esta lista para incluir solo las claves donde el archivo correspondiente fue realmente extraído del ZIP
     files_and_sheets_to_actually_attempt = [
         key for key in rename_keys_to_process if key[0] in uploaded
     ]
 
-    # >>>>>>>>>> AQUÍ SE SELECCIONAN LOS PRIMEROS 4 ARCHIVOS/HOJAS <<<<<<<<<<
+    # >>>>>>>>>> AQUÍ SE SELECCIONAN LOS PRIMEROS 4 ARCHIVOS/HOJAS (para la prueba) <<<<<<<<<<
     subset_to_process = files_and_sheets_to_actually_attempt[:4]
     # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
     print(
-        f"MODO DE PRUEBA: Procesando solo {len(subset_to_process)} combinaciones de archivo/hoja de un total de {len(files_and_sheets_to_actually_attempt)} posibles (filtrado por archivos subidos/recibidos).")
+        f"MODO DE PRUEBA: Procesando solo {len(subset_to_process)} combinaciones de archivo/hoja de un total de {len(files_and_sheets_to_actually_attempt)} posibles (filtrado por archivos en ZIP).")
 
     for (archivo, hoja) in subset_to_process:
 
+        # Verifica que el archivo raw exista en memoria (debería existir ya que filtramos por 'uploaded')
         raw = _saved_files.get(archivo)
         if raw is None:
             advertencias.append(
-                f"ADVERTENCIA: Archivo '{archivo}' listado para procesar (hoja '{hoja}') fue inesperadamente no encontrado en memoria durante la iteración. No se procesará esta combinación.")
+                f"ADVERTENCIA: Archivo '{archivo}' listado para procesar (hoja '{hoja}') fue inesperadamente no encontrado en memoria (extraído del ZIP). No se procesará esta combinación.")
             continue
 
         try:
             df = pd.read_excel(io.BytesIO(raw), sheet_name=hoja)
             print(
-                f"Archivo '{archivo}', Hoja '{hoja}' leído exitosamente con Pandas.")
+                f"Archivo '{archivo}', Hoja '{hoja}' leído exitosamente con Pandas desde memoria.")
 
             to_drop = [col for (a, h, col) in drop_set if a ==
                        archivo and h == hoja]
@@ -342,7 +358,6 @@ async def process_all_files_endpoint(files: List[UploadFile] = File(...)):
                     continue
 
                 columns = df.columns.tolist()
-                # Usamos la sentencia SQL corregida
                 quoted_columns = [f'"{col}"' for col in columns]
                 columns_sql_string = ', '.join(quoted_columns)
                 insert_sql = f"INSERT INTO {table_name} ({columns_sql_string}) VALUES %s"
@@ -400,6 +415,7 @@ async def process_all_files_endpoint(files: List[UploadFile] = File(...)):
     pass
 
     # 6) Limpiar los archivos raw de la memoria una vez procesados
+    # Aunque ahora leemos del ZIP, mantenemos esto para limpiar la variable global si se usó
     _saved_files.clear()
     print("Archivos raw limpiados de la memoria después del procesamiento.")
 

@@ -1,487 +1,265 @@
+# main.py
+
 import pandas as pd
 import io
 import os
 import requests
 import json
+import psycopg2
 import psycopg2.extras
-import zipfile  # Importar la librería zipfile
-from fastapi import FastAPI, Request, File, UploadFile, Form  # Importar Form
+import zipfile
+from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.responses import JSONResponse
-from typing import List, Dict, Any
-from typing import Dict, Any
+from typing import List, Dict, Any, Tuple
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
+from dotenv import load_dotenv  # Importar load_dotenv
 
+# Importar la función de procesamiento de datos
+from data_processing import run_data_processing
+
+# Cargar variables de entorno desde .env
+# Esto es crucial para el desarrollo local y para que Render las cargue automáticamente.
+load_dotenv()
 
 app = FastAPI()
 
-# Almacena los archivos raw (como los sube Make) - Esto lo mantendremos por ahora para el procesamiento
+# Esto ya no es estrictamente necesario si los archivos se procesan y luego se eliminan.
+# Lo mantengo por si acaso tienes alguna otra necesidad de guardar archivos raw.
 _saved_files: dict[str, bytes] = {}
-
-# === Esto ya NO lo usaremos para almacenar DataFrames procesados ===
-# _processed_dfs: dict[str, pd.DataFrame] = {}
-# ==================================================================
 
 # === Configuración de la conexión a la base de datos ===
 # Leer la URL de conexión desde las variables de entorno (.env local y Render)
+# Ejemplo de formato DATABASE_URL para Supabase:
+# postgresql://postgres:[YOUR_PASSWORD]@db.[YOUR_PROJECT_REF].supabase.co:5432/postgres
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # Validar si la URL de la base de datos está configurada
 if not DATABASE_URL:
-    # Podríamos querer lanzar un error o simplemente imprimir un mensaje.
-    # Para el despliegue, es mejor lanzar un error que impida que el servicio inicie sin DB.
-    # Para desarrollo local, a veces es útil permitir que inicie pero falle si intenta usar la DB.
-    # Por ahora, imprimiremos y asumiremos que para operaciones que requieren DB, fallará.
-    print("ADVERTENCIA: La variable de entorno DATABASE_URL no está configurada. Las operaciones de base de datos fallarán.")
-    # Si quieres que el servicio NO inicie sin la DB, descomenta la siguiente línea:
-    # raise Exception("DATABASE_URL no configurada")
+    print("ADVERTENCIA: La variable de entorno DATABASE_URL no está configurada. Las operaciones de base de datos no funcionarán.")
+    # En un entorno de producción, podrías querer lanzar una excepción aquí
+    # o hacer que la app no inicie si la DB es crítica.
+    # raise ValueError("DATABASE_URL no está configurada. No se puede iniciar la aplicación.")
 
-# Crear el engine de SQLAlchemy
-# El pool_recycle es útil en entornos como Render para manejar conexiones inactivas
-# Puedes ajustar pool_size y max_overflow si tienes muchos usuarios concurrentes
-try:
-    engine = create_engine(DATABASE_URL, pool_recycle=3600)
-    print("Conexión a la base de datos configurada.")
-except Exception as e:
-    print(f"Error al crear el engine de la base de datos: {e}")
-    engine = None  # Asegúrate de que engine sea None si falla la creación
+# Función para obtener un motor de SQLAlchemy para la conexión a la base de datos
 
 
-# ======================================================
+def get_db_engine():
+    if not DATABASE_URL:
+        # Aquí se lanza una excepción si la URL no está configurada,
+        # lo que evitará errores posteriores si se intenta usar el motor.
+        raise ValueError(
+            "DATABASE_URL no está configurada. No se puede conectar a la base de datos.")
+    try:
+        # SQLAlchemy usa un formato diferente para psycopg2, a veces necesita el prefijo.
+        # Si DATABASE_URL ya viene con 'postgresql://', no es necesario cambiarlo.
+        # create_engine puede manejarlo.
+        engine = create_engine(DATABASE_URL)
+        return engine
+    except Exception as e:
+        print(f"Error al crear el motor de base de datos: {e}")
+        raise  # Re-lanzar la excepción para que se maneje aguas arriba
+
+# Nueva función para guardar un DataFrame en Supabase
 
 
-# --- Función para calcular insights (la modificaremos después) ---
-def calcular_pacientes_nuevos_atendidos() -> int:  # Ya no necesita dataframes como parámetro
+def save_dataframe_to_supabase(df: pd.DataFrame, table_name: str, if_exists: str = 'replace') -> bool:
     """
-    Calcula el número total de pacientes nuevos atendidos
-    leyendo los datos desde la base de datos.
+    Guarda un DataFrame de Pandas en una tabla de Supabase (PostgreSQL).
+
+    Args:
+        df: El DataFrame de Pandas a guardar.
+        table_name: El nombre de la tabla en Supabase.
+        if_exists: Comportamiento si la tabla ya existe ('fail', 'replace', 'append').
+                   'replace' eliminará la tabla y la creará de nuevo.
+                   'append' añadirá nuevas filas.
+
+    Returns:
+        True si la operación fue exitosa, False en caso contrario.
     """
-    if engine is None:
-        print("Error: No se puede calcular insights, la conexión a la base de datos no está configurada.")
-        return 0
+    if df.empty:
+        print(
+            f"ADVERTENCIA: DataFrame '{table_name}' está vacío. No se guardará en Supabase.")
+        # Consideramos que no guardar un DF vacío es un éxito si no hay datos.
+        return True
+
+    if not DATABASE_URL:
+        print(
+            f"ERROR: DATABASE_URL no configurada para guardar '{table_name}'.")
+        return False  # No podemos guardar sin la URL de la DB
 
     try:
-        # === MODIFICACIÓN: Leer datos desde la base de datos ===
-        # Usamos una conexión con with para asegurar que se cierre correctamente
+        engine = get_db_engine()
         with engine.connect() as connection:
-            # Ejemplo de cómo leer una tabla. El nombre 'citas_pacientes' depende
-            # de cómo la guardes en process_files_endpoint (Pandas la pone en minúsculas)
-            # Tendremos que confirmar los nombres exactos de las tablas después de la primera ejecución.
-            # df_citas_pacientes = pd.read_sql("SELECT * FROM citas_pacientes", connection)
-            # df_citas_motivo = pd.read_sql("SELECT * FROM citas_motivo", connection)
-
-            # Por ahora, esta función no funcionará completamente porque la lógica
-            # de lectura de DB y los nombres de tabla aún no están definidos.
-            # La dejaremos así y la completaremos en un paso posterior.
-            print("calculating_pacientes_nuevos_atendidos placeholder - reading from DB logic not implemented yet.")
-            # --- Lógica de cálculo original (ahora comentada/removida ya que lee de DB) ---
-            # if df_citas_pacientes is None or df_citas_motivo is None:
-            #     print("Error: No se encontraron los DataFrames de Citas_Pacientes o Citas_Motivo en _processed_dfs.")
-            #     return 0
-            # ... (resto de la lógica de cálculo que usaba los dataframes) ...
-            # return numero_pacientes_nuevos_atendidos # Resultado del cálculo
-            # --------------------------------------------------------------
-            return 0  # Retornamos 0 temporalmente
-
+            print(
+                f"Intentando guardar DataFrame '{table_name}' en Supabase con if_exists='{if_exists}'...")
+            # to_sql es una función poderosa de Pandas para escribir DataFrames a bases de datos SQL
+            # index=False: No escribir el índice del DataFrame como una columna en la tabla.
+            # chunksize=1000: Insertar en lotes de 1000 filas, mejor para DataFrames grandes.
+            df.to_sql(table_name, con=connection,
+                      if_exists=if_exists, index=False, chunksize=1000)
+            print(
+                f"DataFrame '{table_name}' guardado exitosamente en Supabase.")
+            return True
     except SQLAlchemyError as e:
         print(
-            f"Error de base de datos al calcular pacientes nuevos atendidos: {str(e)}")
-        return 0
+            f"ERROR SQLAlchemy al guardar DataFrame '{table_name}' en Supabase: {e}")
+        return False
     except Exception as e:
-        print(f"Error general calculando pacientes nuevos atendidos: {str(e)}")
-        return 0
+        print(
+            f"ERROR inesperado al guardar DataFrame '{table_name}' en Supabase: {e}")
+        return False
 
-# =============================================================
+# Endpoint de prueba para verificar que el servicio está funcionando
 
 
 @app.get("/")
 async def read_root():
-    # Mensaje actualizado
-    return {"message": "Hola, reychard - Base de datos conectada!"}
+    return {"message": "Bienvenido al Asistente Sherlock de Dentalink"}
+
+# Endpoint para recibir y procesar los archivos de datos
 
 
-@app.post("/upload-excel/")
-async def upload_excel(files: List[UploadFile] = File(...)):
-    resultados = []
-    # Limpiar DataFrames procesados anteriores ya NO es necesario aquí
-    # _processed_dfs.clear() # Línea removida
-    for file in files:
-        try:
-            data = await file.read()
-            _saved_files[file.filename] = data  # Guardamos el archivo raw
+@app.post("/upload-data/")
+async def upload_data(
+    # Recibe múltiples archivos Excel
+    excel_files: List[UploadFile] = File(...),
+    indice_file: UploadFile = File(...)      # Recibe el archivo índice
+):
+    all_advertencias: List[str] = []
+    processed_dfs: Dict[str, pd.DataFrame] = {}
+    index_file_path = "temp_indice.csv"  # Nombre temporal para el archivo índice
+    temp_data_folder = "temp_excel_data"  # Carpeta temporal para los archivos Excel
 
-            resultados.append({
-                "filename": file.filename,
-                # Mensaje actualizado
-                "status": "Archivo recibido y guardado en memoria para procesamiento"
-            })
-        except Exception as e:
-            resultados.append({
-                "filename": file.filename,
-                "error": str(e)
-            })
-    return {"resultados": resultados}
-
-
-@app.post("/process-all-files/")
-# Espera un solo archivo tipo File
-async def process_all_files_endpoint(zip_file: UploadFile = File(...)):
-    """
-    Endpoint para recibir un archivo ZIP con todos los archivos Excel dentro,
-    descomprimirlo en memoria y procesar los archivos, incluyendo el índice.
-    Espera UN solo archivo UploadFile que es el ZIP.
-    """
-    # Validar si el engine de la base de datos se creó correctamente
-    if engine is None:
-        _saved_files.clear()
-        return JSONResponse({"error": "No se pudo conectar a la base de datos para procesar los archivos."}, status_code=500)
-
-    # Limpiamos saved_files al inicio para asegurarnos de que solo tenemos los archivos del ZIP
-    _saved_files.clear()
-
-    resultados = []
-    advertencias = []
-    raw_index = None
-
-    print(f"Recibido archivo: {zip_file.filename}")
-
-    # === Descomprimir el archivo ZIP en memoria ===
     try:
-        zip_content = await zip_file.read()  # Leer el contenido binario del ZIP
-        # Usamos io.BytesIO para tratar el contenido binario como un archivo en memoria
-        with zipfile.ZipFile(io.BytesIO(zip_content), 'r') as zip_ref:
+        # Asegurarse de que el directorio temporal exista
+        os.makedirs(temp_data_folder, exist_ok=True)
+
+        # 1. Guardar el archivo índice temporalmente
+        # El contenido del archivo se lee directamente del stream de subida
+        with open(index_file_path, "wb") as buffer:
+            buffer.write(indice_file.file.read())
+        print(
+            f"Archivo índice '{indice_file.filename}' guardado temporalmente en: {index_file_path}")
+
+        # 2. Guardar los archivos Excel temporalmente
+        excel_filepaths = []
+        for excel_file in excel_files:
+            file_path = os.path.join(temp_data_folder, excel_file.filename)
+            with open(file_path, "wb") as buffer:
+                buffer.write(excel_file.file.read())
+            excel_filepaths.append(file_path)
             print(
-                f"Archivo ZIP '{zip_file.filename}' abierto. Contiene {len(zip_ref.namelist())} archivos.")
-            # Iterar sobre cada archivo dentro del ZIP
-            for filename_in_zip in zip_ref.namelist():
-                # Procesar solo archivos Excel
-                if filename_in_zip.endswith(('.xlsx', '.xls')):
-                    try:
-                        with zip_ref.open(filename_in_zip) as excel_file_in_zip:
-                            # Leemos el contenido de cada archivo Excel dentro del ZIP
-                            data = excel_file_in_zip.read()
-                            # Guardamos el contenido en nuestra variable en memoria
-                            _saved_files[filename_in_zip] = data
-                            print(
-                                f"Archivo '{filename_in_zip}' extraído del ZIP.")
-                            # Identificamos el archivo indice.xlsx (ignorando case)
-                            if filename_in_zip.lower() == "indice.xlsx":
-                                raw_index = data
+                f"Archivo Excel '{excel_file.filename}' guardado temporalmente en: {file_path}")
 
-                    except Exception as e:
-                        advertencias.append({
-                            "filename_in_zip": filename_in_zip,
-                            "error": f"Error al extraer o leer archivo del ZIP: {str(e)}"
-                        })
+        # 3. Ejecutar la lógica de procesamiento de datos
+        # Se pasa la ruta de la carpeta donde están los excels y la ruta del índice.
+        # run_data_processing devolverá un diccionario de DataFrames procesados
+        # y una lista de advertencias.
+        processed_dfs, run_warnings = run_data_processing(
+            temp_data_folder, index_file_path)
+        # Añadir las advertencias al listado general
+        all_advertencias.extend(run_warnings)
 
-    except zipfile.BadZipFile:
-        _saved_files.clear()
-        return JSONResponse({"error": "El archivo subido no es un archivo ZIP válido."}, status_code=400)
+        # 4. === LÓGICA PARA GUARDAR EN SUPABASE ===
+        supabase_save_success = True
+
+        # Guarda el DataFrame de análisis final
+        df_analisis_final = processed_dfs.get('df_analisis_final')
+        if df_analisis_final is not None and not df_analisis_final.empty:
+            # La tabla 'analisis_atenciones' contendrá el DataFrame consolidado
+            # 'replace' es ideal para actualizaciones diarias donde los datos del día anterior no son necesarios.
+            if not save_dataframe_to_supabase(df_analisis_final, 'analisis_atenciones', if_exists='replace'):
+                supabase_save_success = False
+                all_advertencias.append(
+                    "ERROR: Falló el guardado de 'analisis_atenciones' en Supabase.")
+        else:
+            all_advertencias.append(
+                "ADVERTENCIA: 'df_analisis_final' está vacío o no se encontró. No se guardará en Supabase.")
+
+        # Guarda los DataFrames de perfil de pacientes nuevos
+        # Iteramos sobre todos los DataFrames que empiezan con 'Perfil_Pacientes_Nuevos_Atendidos_Por_'
+        for df_name, df in processed_dfs.items():
+            if df_name.startswith('Perfil_Pacientes_Nuevos_Atendidos_Por_'):
+                # Generamos un nombre de tabla limpio y en minúsculas para Supabase.
+                # Reemplazamos espacios, tildes y el prefijo largo.
+                table_name = df_name.lower().replace(
+                    'perfil_pacientes_nuevos_atendidos_por_', 'perfil_nuevos_')
+                table_name = table_name.replace(' ', '_').replace('ó', 'o').replace(
+                    'á', 'a').replace('é', 'e').replace('í', 'i').replace('ú', 'u')
+
+                if not save_dataframe_to_supabase(df, table_name, if_exists='replace'):
+                    supabase_save_success = False
+                    all_advertencias.append(
+                        f"ERROR: Falló el guardado de '{df_name}' en Supabase.")
+        # =======================================
+
     except Exception as e:
-        _saved_files.clear()
-        return JSONResponse({"error": f"Error al procesar el archivo ZIP: {str(e)}"}, status_code=500)
-    # === Fin de la descompresión del ZIP ===
+        # Captura cualquier excepción que ocurra durante el proceso
+        error_message = f"ERROR INTERNO DEL SERVIDOR en /upload-data/: {e}"
+        all_advertencias.append(error_message)
+        print(error_message)  # Imprimir el error en los logs de Render
+        # Asegurar que se limpian los archivos temporales incluso si hay un error
+        supabase_save_success = False  # Marcar como fallo general
 
-    # Verificamos si el indice.xlsx fue encontrado dentro del ZIP
-    if raw_index is None:
-        _saved_files.clear()
-        return JSONResponse({"error": "No se encontró indice.xlsx dentro del archivo ZIP subido."}, status_code=400)
-
-    # Ahora _saved_files contiene los contenidos de los archivos Excel extraídos del ZIP.
-    # La lógica restante es la misma que antes.
-
-    # 1) Leer el índice desde memoria (ya tenemos raw_index del ZIP)
-    try:
-        # raw_index ya fue leído del ZIP
-        indice_df = pd.read_excel(io.BytesIO(raw_index))
-        print("indice.xlsx leído exitosamente desde el ZIP.")
-    except Exception as e:
-        _saved_files.clear()
-        return JSONResponse({"error": f"Error al leer indice.xlsx desde el ZIP: {str(e)}. Asegúrese de que sea un archivo Excel válido dentro del ZIP."}, status_code=400)
-
-    # 2) Construir rename_dict y drop_set (copiar lógica)
-    rename_dict: dict[tuple[str, str], dict[str, str]] = {}
-    drop_set: set[tuple[str, str, str]] = set()
-
-    required_cols = ["Archivo", "Sheet",
-                     "Columna", "Nombre unificado", "Acción"]
-    if not all(col in indice_df.columns for col in required_cols):
-        missing = [col for col in required_cols if col not in indice_df.columns]
-        _saved_files.clear()
-        return JSONResponse({"error": f"Columnas requeridas faltantes en indice.xlsx: {missing}. Asegúrese de que el archivo índice dentro del ZIP tenga las columnas correctas."}, status_code=400)
-
-    for idx, row in indice_df.iterrows():
-        try:
-            if pd.isna(row["Archivo"]) or pd.isna(row["Sheet"]) or pd.isna(row["Columna"]) or pd.isna(row["Nombre unificado"]) or pd.isna(row["Acción"]):
-                advertencias.append(
-                    f"Fila {idx+2} en indice.xlsx (dentro del ZIP) contiene valores faltantes en columnas clave y será ignorada.")
-                continue
-
-            archivo = str(row["Archivo"]).strip()
-            hoja = str(row["Sheet"]).strip()
-            orig = str(row["Columna"]).strip()
-            nuevo = str(row["Nombre unificado"]).strip()
-            accion = str(row["Acción"]).strip().lower()
-
-            if not archivo or not hoja or not orig or not accion:
-                advertencias.append(
-                    f"Fila {idx+2} en indice.xlsx (dentro del ZIP) tiene campos vacíos después de limpiar y será ignorada.")
-                continue
-
-            key = (archivo, hoja)
-            if accion == "drop":
-                drop_set.add((archivo, hoja, orig))
-            elif accion == "keep":
-                if key not in rename_dict:
-                    rename_dict[key] = {}
-                if not nuevo:
-                    advertencias.append(
-                        f"Fila {idx+2} en indice.xlsx (dentro del ZIP) tiene acción 'keep' para columna '{orig}' pero el 'Nombre unificado' está vacío. Esta columna no se renombrará.")
-                    rename_dict[key][orig] = orig
-                else:
-                    rename_dict[key][orig] = nuevo
-            else:
-                advertencias.append(
-                    f"Fila {idx+2} en indice.xlsx (dentro del ZIP) tiene acción '{accion}' no reconocida para columna '{orig}' en archivo '{archivo}' hoja '{hoja}'. La fila será ignorada.")
-        except Exception as e:
-            advertencias.append(
-                f"Error procesando fila {idx+2} en indice.xlsx (dentro del ZIP): {str(e)}. Fila: {row.to_dict()}.")
-
-    # 3) Validar contra la lista esperada de archivos Y los archivos recibidos del ZIP
-    expected = {archivo for (archivo, _) in rename_dict.keys()}
-    expected.update({archivo for (archivo, _, _) in drop_set})
-    # 'uploaded' son ahora los nombres de archivo que extrajimos del ZIP, menos el indice
-    uploaded = set(_saved_files.keys()) - {"indice.xlsx"}
-
-    faltan = expected - uploaded
-    sobran = uploaded - expected
-
-    archivos_faltantes_no_procesables = list(faltan)
-    archivos_sobrantes_no_procesables = list(sobran)
-
-    if faltan:
-        advertencias.append(
-            f"ADVERTENCIA: No se encontraron estos archivos esperados (listados en el índice) dentro del ZIP: {sorted(faltan)}. No podrán ser procesados.")
-    if sobran:
-        advertencias.append(
-            f"ADVERTENCIA: Se encontraron archivos dentro del ZIP no listados en el índice: {sorted(sobran)}. No serán procesados.")
-
-    # 4) Procesar *solamente* los (archivo, hoja) definidos en rename_dict *que sí fueron extraídos del ZIP*
-    # === INICIO DE LA SELECCIÓN DEL SUBSET Y LOGICA DE execute_values (Copiar lógica) ===
-    archivos_procesados_con_exito = set()
-
-    rename_keys_to_process = sorted(list(rename_dict.keys()))
-
-    # Filtramos esta lista para incluir solo las claves donde el archivo correspondiente fue realmente extraído del ZIP
-    files_and_sheets_to_actually_attempt = [
-        key for key in rename_keys_to_process if key[0] in uploaded
-    ]
-
-    # >>>>>>>>>> AQUÍ SE SELECCIONAN LOS PRIMEROS 4 ARCHIVOS/HOJAS (para la prueba) <<<<<<<<<<
-    subset_to_process = files_and_sheets_to_actually_attempt[:4]
-    # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-    print(
-        f"MODO DE PRUEBA: Procesando solo {len(subset_to_process)} combinaciones de archivo/hoja de un total de {len(files_and_sheets_to_actually_attempt)} posibles (filtrado por archivos en ZIP).")
-
-    for (archivo, hoja) in subset_to_process:
-
-        # Verifica que el archivo raw exista en memoria (debería existir ya que filtramos por 'uploaded')
-        raw = _saved_files.get(archivo)
-        if raw is None:
-            advertencias.append(
-                f"ADVERTENCIA: Archivo '{archivo}' listado para procesar (hoja '{hoja}') fue inesperadamente no encontrado en memoria (extraído del ZIP). No se procesará esta combinación.")
-            continue
-
-        try:
-            df = pd.read_excel(io.BytesIO(raw), sheet_name=hoja)
-            print(
-                f"Archivo '{archivo}', Hoja '{hoja}' leído exitosamente con Pandas desde memoria.")
-
-            to_drop = [col for (a, h, col) in drop_set if a ==
-                       archivo and h == hoja]
-            cols_to_actually_drop = [
-                col for col in to_drop if col in df.columns]
-            if cols_to_actually_drop:
-                df = df.drop(columns=cols_to_actually_drop)
-                print(
-                    f"Columnas eliminadas para '{archivo}' '{hoja}': {cols_to_actually_drop}")
-
-            mapeo = rename_dict.get((archivo, hoja), {})
-            actual_mapeo = {orig_col: new_col for orig_col,
-                            new_col in mapeo.items() if orig_col in df.columns}
-
-            if actual_mapeo:
-                df.rename(columns=actual_mapeo, inplace=True)
-                print(
-                    f"Columnas renombradas para '{archivo}' '{hoja}': {actual_mapeo}")
-
-            table_name = archivo.replace(".xlsx", "").replace(
-                ".xslx", "").lower().replace(" ", "_")
-            table_name = "".join(
-                c for c in table_name if c.isalnum() or c == '_' or c == '-').strip('_-')
-
-            # --- Lógica de guardado con execute_values ---
+    finally:
+        # Este bloque 'finally' se ejecuta siempre, haya o no un error.
+        # Es crucial para limpiar los archivos temporales.
+        print("Iniciando limpieza de archivos temporales...")
+        if os.path.exists(index_file_path):
             try:
+                os.remove(index_file_path)
+                print(f"Archivo temporal eliminado: {index_file_path}")
+            except OSError as e:
                 print(
-                    f"Intentando guardar DataFrame procesado para '{archivo}' '{hoja}' en la tabla '{table_name}' en la base de datos usando execute_values...")
+                    f"Error al eliminar archivo temporal {index_file_path}: {e}")
+                all_advertencias.append(
+                    f"ADVERTENCIA: No se pudo eliminar archivo temporal {index_file_path}.")
 
-                try:
-                    if not df.empty:
-                        df.head(0).to_sql(table_name, con=engine,
-                                          if_exists='append', index=False)
-                        print(
-                            f"Verificando/Creando estructura de tabla '{table_name}'...")
-                    else:
-                        print(
-                            f"DataFrame para '{archivo}' '{hoja}' está vacío. No se verificará/creará la tabla con head(0).")
-
-                except SQLAlchemyError as create_table_err:
-                    print(
-                        f"Posible error al verificar/crear tabla '{table_name}' (puede ser que ya existía): {create_table_err}")
-                    pass
-
-                data_to_insert = df.values.tolist()
-
-                if not data_to_insert:
-                    print(
-                        f"DataFrame para '{archivo}' '{hoja}' está vacío, no hay datos para insertar.")
-                    resultados.append({
-                        "archivo":    archivo,
-                        "hoja":     hoja,
-                        "status":   f"Procesado y guardado en tabla '{table_name}' (DataFrame vacío)",
-                        "columns":   df.columns.tolist(),
-                        "row_count": 0,
-                        "saved_to_table": table_name
-                    })
-                    archivos_procesados_con_exito.add(archivo)
-                    continue
-
-                columns = df.columns.tolist()
-                quoted_columns = [f'"{col}"' for col in columns]
-                columns_sql_string = ', '.join(quoted_columns)
-                insert_sql = f"INSERT INTO {table_name} ({columns_sql_string}) VALUES %s"
-
-                with engine.connect() as connection:
-                    raw_connection = connection.connection
-                    with raw_connection.cursor() as cursor:
-                        psycopg2.extras.execute_values(
-                            cursor,
-                            insert_sql,
-                            data_to_insert,
-                            page_size=1000
-                        )
-                    raw_connection.commit()
-
+        if os.path.exists(temp_data_folder):
+            try:
+                # Eliminar todos los archivos dentro de la carpeta temporal
+                for f_name in os.listdir(temp_data_folder):
+                    f_path = os.path.join(temp_data_folder, f_name)
+                    if os.path.isfile(f_path):  # Asegurarse de que es un archivo
+                        os.remove(f_path)
+                        print(f"Archivo temporal eliminado: {f_path}")
+                # Después de eliminar los archivos, eliminar la carpeta
+                os.rmdir(temp_data_folder)
+                print(f"Carpeta temporal eliminada: {temp_data_folder}")
+            except OSError as e:
                 print(
-                    f"DataFrame procesado guardado exitosamente en la tabla '{table_name}' usando execute_values.")
+                    f"Error al eliminar carpeta temporal {temp_data_folder}: {e}")
+                all_advertencias.append(
+                    f"ADVERTENCIA: No se pudo eliminar carpeta temporal {temp_data_folder}.")
 
-                resultados.append({
-                    "archivo":    archivo,
-                    "hoja":     hoja,
-                    "status":   f"Procesado y guardado en tabla '{table_name}' exitosamente (execute_values)",
-                    "columns":   columns,
-                    "row_count": len(data_to_insert),
-                    "saved_to_table": table_name
-                })
-                archivos_procesados_con_exito.add(archivo)
-
-            except SQLAlchemyError as db_err:
-                print(
-                    f"Error de base de datos al guardar '{archivo}' '{hoja}' en '{table_name}' (execute_values): {db_err}")
-                advertencias.append({
-                    "archivo": archivo,
-                    "hoja":    hoja,
-                    "error":   f"Error al guardar en la base de datos (execute_values): {str(db_err)}"
-                })
-            except Exception as e:
-                print(f"Error general guardando '{archivo}' '{hoja}': {e}")
-                advertencias.append({
-                    "archivo": archivo,
-                    "hoja":    hoja,
-                    "error":   f"Error durante el guardado (execute_values): {str(e)}"
-                })
-
-        except Exception as e:
-            print(
-                f"Error al leer el archivo Excel o procesar con Pandas '{archivo}' hoja '{hoja}': {e}")
-            advertencias.append({
-                "archivo": archivo,
-                "hoja":    hoja,
-                "error":   f"Error al leer el archivo Excel o procesar con Pandas: {str(e)}"
-            })
-
-    # 5) Reportar archivos esperados que no pudieron ser procesados (si aplica)
-    pass
-
-    # 6) Limpiar los archivos raw de la memoria una vez procesados
-    # Aunque ahora leemos del ZIP, mantenemos esto para limpiar la variable global si se usó
-    _saved_files.clear()
-    print("Archivos raw limpiados de la memoria después del procesamiento.")
-
-    # 7) Devolver resultados y advertencias
-    response_content: Dict[str, Any] = {"resultados_procesamiento": resultados}
-    if advertencias:
-        response_content["advertencias_o_errores"] = advertencias
-        return JSONResponse(response_content, status_code=500)
-    else:
-        return JSONResponse(response_content, status_code=200)
-
-
-@app.post("/calculate-insights/")
-async def calculate_insights_endpoint():
-    """
-    Endpoint para calcular los insights predefinidos y devolverlos.
-    La lógica de guardar en Airtable se maneja en Make.
-    *** Ahora lee los datos desde la base de datos. ***
-    """
-
-    # Ya no verificamos _processed_dfs, verificamos la conexión a la DB
-    if engine is None:
-        return JSONResponse({"error": "No se pudo conectar a la base de datos para calcular insights."}, status_code=500)
-
-    try:
-        # === Calcular el primer insight (que ahora lee de la DB) ===
-        # NOTA: La función calcular_pacientes_nuevos_atendidos actual es un placeholder
-        # y necesita ser modificada para leer de la base de datos y aceptar filtros si aplica.
-        pacientes_nuevos_atendidos_count = calcular_pacientes_nuevos_atendidos()
-
-        # ... (resto de la lógica para devolver el insight) ...
-        insight_id = "insight_pacientes_nuevos_atendidos_total"
-        question_key = "Cantidad total de pacientes nuevos atendidos"
-        # Usamos el resultado del cálculo (actualmente 0)
-        answer_value = pacientes_nuevos_atendidos_count
-        units = "pacientes"
-        dimensions = {}  # Podríamos devolver esto si es útil para Make
+        # Preparar la respuesta JSON final
+        # Si hubo algún fallo en el guardado de Supabase o un error general,
+        # el status code de la respuesta será 500 (Internal Server Error).
+        # De lo contrario, será 200 (OK).
+        response_status_code = 200 if supabase_save_success else 500
+        response_message = "Archivos procesados exitosamente."
+        if not supabase_save_success:
+            response_message += " Sin embargo, hubo errores en el procesamiento o al guardar DataFrames en Supabase."
 
         return JSONResponse({
-            "status": "Insights calculados exitosamente",
-            "calculated_insight": {
-                "insight_id": insight_id,
-                "question_key": question_key,
-                "answer_value": answer_value,
-                "units": units,
-                "dimensions": dimensions
-            }
-        }, status_code=200)
-
-    except Exception as e:
-        print(f"Error general en el endpoint /calculate-insights: {e}")
-        return JSONResponse({"error": f"Ocurrió un error al calcular insights: {str(e)}"}, status_code=500)
+            "message": response_message,
+            # Nombres de los DFs que se intentaron procesar
+            "processed_dataframes": list(processed_dfs.keys()),
+            "warnings": all_advertencias
+        }, status_code=response_status_code)
 
 
-@app.post("/slack")
-async def slack_command(request: Request):
-    """
-    Endpoint activado por el comando /sherlock en Slack.
-    Recibe la pregunta del usuario y la envía a Make para procesar el árbol de decisiones.
-    """
-    form_data = await request.form()
-    print("Payload recibido:", form_data)
+# Endpoint para el webhook de Make (sin cambios relevantes para este paso)
+@app.post("/ask-sherlock/")
+async def ask_sherlock(request: Request):
+    try:
+        form_data = await request.json()
+        user_question = form_data.get("user_question")
+    except json.JSONDecodeError:
+        return JSONResponse({"text": "Solicitud JSON inválida."}, status_code=400)
 
-    user_question = form_data.get("text")
     if not user_question:
-        # Mensaje mejorado
         return JSONResponse({"text": "Lo siento, no recibí tu pregunta. Por favor, intenta de nuevo."}, status_code=200)
 
     make_webhook_url = os.environ.get("MAKE_SHERLOCK_WEBHOOK_URL")
@@ -501,6 +279,7 @@ async def slack_command(request: Request):
         response_from_make = requests.post(
             make_webhook_url, json=payload_to_make)
 
+        # Lanza un error para códigos de respuesta HTTP 4xx/5xx
         response_from_make.raise_for_status()
 
         return JSONResponse({"text": f"Pregunta recibida: '{user_question}'. Sherlock está procesando. Un momento por favor..."}, status_code=200)
@@ -509,5 +288,5 @@ async def slack_command(request: Request):
         print(f"Error al llamar al webhook de Make: {e}")
         return JSONResponse({"text": "Ocurrió un error al enviar tu pregunta a Sherlock para procesamiento. Por favor contacta a Soporte."}, status_code=500)
     except Exception as e:
-        print(f"Ocurrió un error inesperado en el endpoint /slack: {e}")
-        return JSONResponse({"text": "Ocurrió un error interno al procesar tu pregunta. Por favor contacta a soporte."}, status_code=500)
+        print(f"Un error inesperado ocurrió en /ask-sherlock: {e}")
+        return JSONResponse({"text": "Ocurrió un error inesperado al procesar tu pregunta. Por favor contacta a Soporte."}, status_code=500)

@@ -229,122 +229,255 @@ def generar_insights_pacientes(
     all_advertencias: List[str]
 ) -> Dict[str, pd.DataFrame]:
     resultados_dfs: Dict[str, pd.DataFrame] = {}
+    print(
+        f"DataFrames disponibles para generar insights: {list(processed_dfs.keys())}")
+
+    # --- Obtener los DataFrames base usando los nombres clave correctos ---
+    # Estos nombres DEBEN coincidir con los generados por load_dataframes_from_uploads
+    # (nombre_base_del_archivo_original + "_df")
+
+    # Asumiendo que "Pacientes_Nuevos.xlsx" es tu archivo principal de pacientes
+    df_pacientes = get_df_by_type(
+        processed_dfs, "Pacientes_Nuevos_df", all_advertencias)
+
+    # Asumiendo que "Acciones.xlsx" es tu archivo principal de tratamientos/acciones
     df_tratamientos = get_df_by_type(
-        processed_dfs, "Tratamientos", all_advertencias)
-    df_pacientes = get_df_by_type(processed_dfs, "Pacientes", all_advertencias)
-    df_citas = get_df_by_type(processed_dfs, "Citas", all_advertencias)
+        processed_dfs, "Acciones_df", all_advertencias)
 
+    # Asumiendo que "Citas_Motivo.xlsx" es tu archivo principal de citas
+    # Si tienes otro como "Citas_Pacientes.xlsx" y necesitas sus datos, obténlo también
+    # y decide cómo/si hacer merge más adelante.
+    df_citas = get_df_by_type(
+        processed_dfs, "Citas_Motivo_df", all_advertencias)
+    # df_citas_pacientes_detalle = get_df_by_type(processed_dfs, "Citas_Pacientes_df", all_advertencias) # Ejemplo si necesitas otro
+
+    # --- Validaciones Fundamentales ---
     if df_pacientes is None:
-        all_advertencias.append(
-            "ERROR CRÍTICO: DataFrame de Pacientes no disponible.")
-        print("ERROR CRÍTICO: DataFrame de Pacientes no disponible.")
-        return resultados_dfs
+        msg = "ERROR CRÍTICO: DataFrame de Pacientes ('Pacientes_Nuevos_df') no disponible. No se puede continuar el análisis de perfiles."
+        all_advertencias.append(msg)
+        print(msg)
+        return resultados_dfs  # Retorna vacío si falta el DF de pacientes
 
-    print("Iniciando enriquecimiento y unión para insights...")
+    print("Iniciando enriquecimiento y unión de DataFrames para insights...")
+
     try:
+        # Empezamos con una copia del DataFrame de pacientes.
         df_analisis_final = df_pacientes.copy()
-        if df_tratamientos is not None:
-            if 'Id Paciente' in df_pacientes.columns and 'Id Paciente' in df_tratamientos.columns:
-                df_analisis_final['Id Paciente'] = df_analisis_final['Id Paciente'].astype(
-                    str)
-                df_tratamientos['Id Paciente'] = df_tratamientos['Id Paciente'].astype(
-                    str)
-                df_analisis_final = pd.merge(
-                    df_analisis_final, df_tratamientos, on='Id Paciente', how='left', suffixes=('_paciente', '_tratamiento'))
-                print(
-                    f"Merge Pacientes y Tratamientos. Filas: {len(df_analisis_final)}")
-            else:
-                all_advertencias.append(
-                    "ADVERTENCIA: 'Id Paciente' no encontrado para merge Pacientes-Tratamientos.")
-        else:
-            all_advertencias.append(
-                "INFO: DataFrame de Tratamientos no disponible.")
+        print(
+            f"DataFrame base para análisis (pacientes): {len(df_analisis_final)} filas.")
 
-        cols_fecha_tratamiento = [
-            'Fecha Creación_tratamiento', 'Fecha de Inicio', 'Fecha Terminado']
-        for col in cols_fecha_tratamiento:
-            if col in df_analisis_final.columns:
+        # --- Merge con Tratamientos ---
+        if df_tratamientos is not None:
+            # Verificar que las columnas 'Id Paciente' existan ANTES del merge
+            # y que los nombres de columna sean los correctos POST-limpieza del índice.
+            # El índice debería haber unificado la columna de ID de paciente a 'ID_Paciente'.
+            col_id_paciente = 'ID_Paciente'  # Asume que el índice unifica a este nombre
+
+            if col_id_paciente in df_analisis_final.columns and col_id_paciente in df_tratamientos.columns:
+                df_analisis_final[col_id_paciente] = df_analisis_final[col_id_paciente].astype(
+                    str)
+                df_tratamientos[col_id_paciente] = df_tratamientos[col_id_paciente].astype(
+                    str)
+
+                df_analisis_final = pd.merge(
+                    df_analisis_final,
+                    df_tratamientos,
+                    on=col_id_paciente,
+                    how='left',
+                    # Sufijos para columnas duplicadas excepto la de unión
+                    suffixes=('_paciente', '_tratamiento')
+                )
+                print(
+                    f"Merge con DataFrame de Tratamientos ('Acciones_df') realizado. Filas después del merge: {len(df_analisis_final)}")
+            else:
+                msg = f"ADVERTENCIA: Columna '{col_id_paciente}' no encontrada en Pacientes o Tratamientos para el merge. Revisa los 'Nombres unificados' en tu indice.xlsx."
+                all_advertencias.append(msg)
+                print(msg)
+        else:
+            msg = "INFO: DataFrame de Tratamientos ('Acciones_df') no disponible. Se continuará sin él para algunos análisis."
+            all_advertencias.append(msg)
+            print(msg)
+
+        # --- Merge con Citas --- (Opcional, decide si es necesario para los perfiles)
+        if df_citas is not None:
+            col_id_paciente = 'ID_Paciente'  # Asume que el índice unifica a este nombre
+            if col_id_paciente in df_analisis_final.columns and col_id_paciente in df_citas.columns:
+                # No es necesario convertir a str de nuevo si ya se hizo para df_analisis_final
+                df_citas[col_id_paciente] = df_citas[col_id_paciente].astype(
+                    str)
+
+                # Aquí podrías necesitar agregar información de citas, por ejemplo, la fecha de la última cita,
+                # o el número total de citas. Un merge directo podría duplicar filas si un paciente tiene muchas citas.
+                # Considera agregar antes del merge o usar un merge 'left' con cuidado.
+                # Por ahora, un merge 'left' simple, pero esto podría necesitar más lógica.
+                df_analisis_final = pd.merge(
+                    df_analisis_final,
+                    df_citas,  # Podrías necesitar seleccionar columnas específicas de df_citas
+                    on=col_id_paciente,
+                    how='left',
+                    # Ajusta sufijos si es necesario
+                    suffixes=('_prev', '_cita')
+                )
+                print(
+                    f"Merge con DataFrame de Citas ('Citas_Motivo_df') realizado. Filas después del merge: {len(df_analisis_final)}")
+            else:
+                msg = f"ADVERTENCIA: Columna '{col_id_paciente}' no encontrada para merge con Citas. Revisa 'Nombres unificados' en indice.xlsx."
+                all_advertencias.append(msg)
+                print(msg)
+        else:
+            msg = "INFO: DataFrame de Citas ('Citas_Motivo_df') no disponible."
+            all_advertencias.append(msg)
+            print(msg)
+
+        # --- Conversiones de Tipo y Cálculo de Edad ---
+        # Asegúrate que los nombres de columna sean los que resultan DESPUÉS de la limpieza del índice
+        # y DESPUÉS de los merges (por los sufijos).
+
+        # Ejemplo para columna de fecha de tratamiento (podría tener sufijo)
+        # El sufijo '_tratamiento' se añade si la columna original existía en ambos DFs antes del merge
+        # y no era la columna de unión.
+        cols_fecha_a_convertir = []
+        if 'Fecha Realizacion_tratamiento' in df_analisis_final.columns:  # Ejemplo de nombre post-merge
+            cols_fecha_a_convertir.append('Fecha Realizacion_tratamiento')
+        # Añade otras columnas de fecha que necesites convertir, considerando los sufijos.
+        # Ejemplos de tu 'local.py' adaptados:
+        # 'Fecha Creación_tratamiento', 'Fecha de Inicio_tratamiento', 'Fecha Terminado_tratamiento'
+        # Debes verificar si estas columnas existen con esos nombres exactos en df_analisis_final.
+
+        for col in cols_fecha_a_convertir:
+            if col in df_analisis_final.columns:  # Doble chequeo
                 try:
                     df_analisis_final[col] = pd.to_datetime(
                         df_analisis_final[col], errors='coerce')
                 except Exception as e_conv:
                     all_advertencias.append(
-                        f"Advertencia: Conversión fallida para '{col}': {e_conv}")
+                        f"Advertencia: Conversión de fecha fallida para '{col}': {e_conv}")
 
-        if 'Fecha de nacimiento' in df_analisis_final.columns:
+        # Cálculo de Edad
+        # Asume que 'Fecha de nacimiento' es el nombre unificado por tu índice para la fecha de nacimiento del paciente
+        # y que viene del DataFrame de pacientes (podría tener sufijo _paciente si hubo colisión de nombres,
+        # pero usualmente las columnas únicas del DF izquierdo no llevan sufijo en un left merge).
+        # Asume que este es el nombre final en df_analisis_final
+        col_fecha_nacimiento = 'Fecha de nacimiento'
+        # proveniente del DF de pacientes.
+
+        if col_fecha_nacimiento in df_analisis_final.columns:
             try:
-                df_analisis_final['Fecha de nacimiento'] = pd.to_datetime(
-                    df_analisis_final['Fecha de nacimiento'], errors='coerce')
-                if not df_analisis_final['Fecha de nacimiento'].isnull().all():
+                df_analisis_final[col_fecha_nacimiento] = pd.to_datetime(
+                    df_analisis_final[col_fecha_nacimiento], errors='coerce')
+                if not df_analisis_final[col_fecha_nacimiento].isnull().all():
+                    # O pd.Timestamp.now(tz='America/Mexico_City')
                     current_time_mex = pd.Timestamp(
                         'now', tz='America/Mexico_City')
-                    if df_analisis_final['Fecha de nacimiento'].dt.tz is None:
-                        df_analisis_final['Fecha de nacimiento'] = df_analisis_final['Fecha de nacimiento'].dt.tz_localize(
+
+                    # Asegurar que la columna de fecha de nacimiento sea tz-aware
+                    if df_analisis_final[col_fecha_nacimiento].dt.tz is None:
+                        df_analisis_final[col_fecha_nacimiento] = df_analisis_final[col_fecha_nacimiento].dt.tz_localize(
                             'America/Mexico_City', ambiguous='infer', nonexistent='NaT')
                     else:
-                        df_analisis_final['Fecha de nacimiento'] = df_analisis_final['Fecha de nacimiento'].dt.tz_convert(
+                        df_analisis_final[col_fecha_nacimiento] = df_analisis_final[col_fecha_nacimiento].dt.tz_convert(
                             'America/Mexico_City')
+
                     time_difference = current_time_mex - \
-                        df_analisis_final['Fecha de nacimiento']
+                        df_analisis_final[col_fecha_nacimiento]
                     df_analisis_final['Edad_float'] = time_difference / \
                         np.timedelta64(1, 'Y')
                     df_analisis_final['Edad'] = df_analisis_final['Edad_float'].astype(
-                        'Int64')
+                        'Int64')  # Nullable Integer
                     print("Columna 'Edad' calculada.")
                 else:
                     all_advertencias.append(
-                        "Advertencia: 'Fecha de nacimiento' sin fechas válidas.")
+                        f"Advertencia: Columna '{col_fecha_nacimiento}' no contiene fechas válidas para calcular Edad.")
                     df_analisis_final['Edad'] = pd.NA
             except Exception as e_edad:
                 all_advertencias.append(
-                    f"Advertencia: Error al calcular Edad: {e_edad}")
+                    f"Advertencia: Error al calcular Edad usando columna '{col_fecha_nacimiento}': {e_edad}")
                 df_analisis_final['Edad'] = pd.NA
         else:
             all_advertencias.append(
-                "Advertencia: 'Fecha de nacimiento' no encontrada.")
+                f"Advertencia: Columna '{col_fecha_nacimiento}' para fecha de nacimiento no encontrada en df_analisis_final.")
             df_analisis_final['Edad'] = pd.NA
 
-        col_sexo = 'Sexo_paciente' if 'Sexo_paciente' in df_analisis_final.columns else 'Sexo'
-        col_sucursal = 'Sucursal_paciente' if 'Sucursal_paciente' in df_analisis_final.columns else 'Sucursal'
-        col_estado_civil = 'Estado Civil_paciente' if 'Estado Civil_paciente' in df_analisis_final.columns else 'Estado Civil'
-        profile_dimensions_pacientes = [
-            'Edad', col_sexo, col_sucursal, col_estado_civil]
+        # --- Lógica de Perfilado ---
+        # Asegúrate que los nombres de las columnas para perfilar sean los correctos en df_analisis_final.
+        # Por ejemplo, si 'Sexo' viene de pacientes, y no hubo colisión de nombres, será 'Sexo'.
+        # Si 'Sucursal' viene de citas y hubo merge, podría ser 'Sucursal_cita'.
+        # REVISA ESTOS NOMBRES DE COLUMNA CUIDADOSAMENTE.
+
+        # Asumiendo que esta es la columna de ID de paciente
+        col_id_paciente_perfil = 'ID_Paciente'
+        col_edad_perfil = 'Edad'
+        # Asume que el índice unifica a 'Sexo' y no hay colisión de nombre post-merge
+        col_sexo_perfil = 'Sexo'
+        # Asume que el índice unifica a 'Sucursal' y es la relevante.
+        col_sucursal_perfil = 'Sucursal'
+        # Si viene de diferentes DFs (paciente, tratamiento, cita), elige la correcta
+        # o usa el sufijo adecuado si hubo colisión (ej. 'Sucursal_cita', 'Sucursal_tratamiento').
+        # Para simplificar, asumimos que 'Sucursal' es la columna final deseada.
+        # Asume que el índice unifica a 'Estado Civil'.
+        col_estado_civil_perfil = 'Estado Civil'
+
+        # Lista de columnas necesarias para los perfiles
+        cols_necesarias_perfil = [col_id_paciente_perfil, col_edad_perfil,
+                                  col_sexo_perfil, col_sucursal_perfil, col_estado_civil_perfil]
+        columnas_existentes_para_perfil = [
+            col for col in cols_necesarias_perfil if col in df_analisis_final.columns]
 
         if not df_analisis_final.empty:
-            valid_profile_dimensions = [
-                dim for dim in profile_dimensions_pacientes if dim in df_analisis_final.columns]
-            if col_sexo not in valid_profile_dimensions:
+            if col_id_paciente_perfil not in columnas_existentes_para_perfil:
                 all_advertencias.append(
-                    f"ADVERTENCIA: Columna '{col_sexo}' no disponible para perfiles de género.")
+                    f"ADVERTENCIA CRÍTICA: Columna '{col_id_paciente_perfil}' para ID de paciente no encontrada para perfilado.")
+            elif col_sexo_perfil not in columnas_existentes_para_perfil:
+                all_advertencias.append(
+                    f"ADVERTENCIA: Columna '{col_sexo_perfil}' no disponible. Perfiles por género no se pueden generar como estaban definidos.")
             else:
-                if 'Edad' in valid_profile_dimensions:
-                    resultados_dfs['perfil_pacientes_edad_genero'] = df_analisis_final.groupby(
-                        ['Edad', col_sexo])['Id Paciente'].nunique().reset_index(name='Numero_Pacientes')
+                # Perfil Edad y Género
+                if col_edad_perfil in columnas_existentes_para_perfil:
+                    perfil_pacientes_edad_genero = df_analisis_final.groupby([col_edad_perfil, col_sexo_perfil])[
+                        col_id_paciente_perfil].nunique().reset_index(name='Numero_Pacientes')
+                    resultados_dfs['perfil_pacientes_edad_genero'] = perfil_pacientes_edad_genero
+                    print(
+                        f"DataFrame 'perfil_pacientes_edad_genero' generado con {len(perfil_pacientes_edad_genero)} filas.")
                 else:
                     all_advertencias.append(
-                        "Advertencia: 'Edad' no disponible para perfil Edad-Género.")
-                if col_sucursal in valid_profile_dimensions:
-                    resultados_dfs['perfil_pacientes_sucursal_genero'] = df_analisis_final.groupby(
-                        [col_sucursal, col_sexo])['Id Paciente'].nunique().reset_index(name='Numero_Pacientes')
+                        f"Advertencia: Columna '{col_edad_perfil}' no disponible para perfil Edad-Género.")
+
+                # Perfil Sucursal y Género
+                if col_sucursal_perfil in columnas_existentes_para_perfil:
+                    perfil_pacientes_sucursal_genero = df_analisis_final.groupby([col_sucursal_perfil, col_sexo_perfil])[
+                        col_id_paciente_perfil].nunique().reset_index(name='Numero_Pacientes')
+                    resultados_dfs['perfil_pacientes_sucursal_genero'] = perfil_pacientes_sucursal_genero
+                    print(
+                        f"DataFrame 'perfil_pacientes_sucursal_genero' generado con {len(perfil_pacientes_sucursal_genero)} filas.")
                 else:
                     all_advertencias.append(
-                        f"Advertencia: '{col_sucursal}' no disponible para perfil Sucursal-Género.")
-                if col_estado_civil in valid_profile_dimensions:
-                    resultados_dfs['perfil_pacientes_estado_civil_genero'] = df_analisis_final.groupby(
-                        [col_estado_civil, col_sexo])['Id Paciente'].nunique().reset_index(name='Numero_Pacientes')
+                        f"Advertencia: Columna '{col_sucursal_perfil}' no disponible para perfil Sucursal-Género.")
+
+                # Perfil Estado Civil y Género
+                if col_estado_civil_perfil in columnas_existentes_para_perfil:
+                    perfil_pacientes_estado_civil_genero = df_analisis_final.groupby([col_estado_civil_perfil, col_sexo_perfil])[
+                        col_id_paciente_perfil].nunique().reset_index(name='Numero_Pacientes')
+                    resultados_dfs['perfil_pacientes_estado_civil_genero'] = perfil_pacientes_estado_civil_genero
+                    print(
+                        f"DataFrame 'perfil_pacientes_estado_civil_genero' generado con {len(perfil_pacientes_estado_civil_genero)} filas.")
                 else:
                     all_advertencias.append(
-                        f"Advertencia: '{col_estado_civil}' no disponible para perfil EstadoCivil-Género.")
+                        f"Advertencia: Columna '{col_estado_civil_perfil}' no disponible para perfil EstadoCivil-Género.")
         else:
             all_advertencias.append(
-                "ADVERTENCIA: df_analisis_final vacío, no se puede perfilar.")
+                "ADVERTENCIA: df_analisis_final está vacío. No se puede realizar perfilado.")
+
+        # Guardar el DataFrame principal de análisis si es útil
         if not df_analisis_final.empty:
             resultados_dfs['df_analisis_final_completo'] = df_analisis_final
             print(
                 f"DataFrame 'df_analisis_final_completo' generado con {len(df_analisis_final)} filas.")
+
     except Exception as e_insight:
-        all_advertencias.append(f"ERROR CRÍTICO en insights: {e_insight}")
-        print(f"ERROR CRÍTICO en insights: {e_insight}")
+        msg = f"ERROR CRÍTICO durante la generación de insights: {e_insight}"
+        all_advertencias.append(msg)
+        print(msg)
         import traceback
         traceback.print_exc()
+
     return resultados_dfs

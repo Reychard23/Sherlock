@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Request, File, UploadFile, HTTPException, Form
+
+from fastapi import FastAPI, Request, File, UploadFile, HTTPException, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Tuple, Literal
 import pandas as pd
@@ -100,114 +101,167 @@ class InMemoryUploadFile:
         self.file.close()
 
 
-@app.post("/trigger_processing_and_save/")
-async def trigger_processing_and_save():
+async def do_the_heavy_processing_and_saving(
+    # Pasaremos lo que necesite, como copias de las variables globales o los datos directamente
+    # Para evitar problemas con el estado global si múltiples requests llegan muy rápido (aunque tu flujo de Make es secuencial)
+    # es mejor pasar los datos necesarios.
+    # Por ahora, para simplificar, asumiremos que puede acceder a las globales,
+    # pero idealmente se le pasarían copias.
+):
+    # Necesita acceso a estas
     global _saved_files, _indice_file_content, _indice_file_name, engine
-    all_server_warnings = []
+
+    print("--- Log Sherlock (BG Task): INICIO TAREA DE FONDO para procesar y guardar ---")
+    all_server_warnings_bg = []  # Usar una lista local para la tarea de fondo
+
+    # --- Copiamos la lógica de tu /trigger_processing_and_save/ original aquí ---
+    # PERO con cuidado con las variables globales si hay concurrencia.
+    # Para tu flujo actual de Make (una ejecución a la vez), acceder a las globales debería estar bien,
+    # pero hay que limpiarlas al final o al inicio de una nueva subida.
+
+    # Hacemos una copia de los datos para que la tarea de fondo trabaje con un "snapshot"
+    # y la limpieza de las globales no afecte a una tarea en curso si algo sale muy mal.
+    current_saved_files = _saved_files.copy()
+    current_indice_content = _indice_file_content
+    current_indice_name = _indice_file_name
+
+    # Limpiamos las globales INMEDIATAMENTE después de copiarlas,
+    # para que el endpoint /upload_single_file/ esté listo para un nuevo lote.
+    _saved_files.clear()
+    _indice_file_content = None
+    _indice_file_name = None
+    print("--- Log Sherlock (BG Task): Variables globales de archivos limpiadas para el próximo lote.")
 
     if engine is None:
-        _saved_files.clear()
-        _indice_file_content = None
-        _indice_file_name = None
-        print("Error crítico: El engine de la base de datos no está inicializado. Limpiando archivos en memoria.")
-        raise HTTPException(
-            status_code=500, detail="Error de configuración del servidor: Conexión a la base de datos no disponible.")
+        print("--- Log Sherlock (BG Task): ERROR - DB Engine no disponible.")
+        # Aquí no podemos hacer HTTPException, la tarea de fondo no devuelve HTTP.
+        # Podrías loggear a un sistema externo o una tabla de estado si necesitas monitorear fallos de tareas de fondo.
+        return
 
-    # CAMBIO AQUÍ: Mensaje de error actualizado para "indice.xlsx"
-    if not _indice_file_content or not _indice_file_name:
-        _saved_files.clear()
-        _indice_file_content = None
-        _indice_file_name = None
-        raise HTTPException(
-            status_code=400, detail="Archivo índice ('indice.xlsx') no encontrado en memoria. Asegúrate de que se haya subido.")
+    if not current_indice_content or not current_indice_name:
+        print("--- Log Sherlock (BG Task): ERROR - Archivo índice no disponible para la tarea.")
+        return
 
-    if not _saved_files:
-        _saved_files.clear()
-        _indice_file_content = None
-        _indice_file_name = None
-        raise HTTPException(
-            status_code=400, detail="No hay archivos de datos en memoria para procesar.")
+    if not current_saved_files:
+        print("--- Log Sherlock (BG Task): ERROR - No hay archivos de datos para la tarea.")
+        return
 
     try:
         print(
-            f"Iniciando procesamiento. Archivo índice: '{_indice_file_name}'. Archivos de datos en memoria: {len(_saved_files)}")
+            f"--- Log Sherlock (BG Task): Iniciando procesamiento. Archivo índice: '{current_indice_name}'. Archivos de datos: {len(current_saved_files)}")
+
         data_files_simulated: List[InMemoryUploadFile] = [InMemoryUploadFile(
-            fname, fcontent) for fname, fcontent in _saved_files.items()]
+            fname, fcontent) for fname, fcontent in current_saved_files.items()]
         indice_file_simulated = InMemoryUploadFile(
-            filename=_indice_file_name, content=_indice_file_content)
+            filename=current_indice_name, content=current_indice_content)
 
+        print("--- Log Sherlock (BG Task): Llamando a load_dataframes_from_uploads...")
         processed_dfs_map, _, _, carga_warnings = procesador_datos.load_dataframes_from_uploads(
-            data_files=data_files_simulated,  # type: ignore
-            index_file=indice_file_simulated  # type: ignore
+            data_files=data_files_simulated,
+            index_file=indice_file_simulated
         )
-        all_server_warnings.extend(carga_warnings)
-        if not processed_dfs_map:
-            _saved_files.clear()
-            _indice_file_content = None
-            _indice_file_name = None
-            raise HTTPException(
-                status_code=400, detail=f"No se pudieron cargar los DataFrames desde memoria. Advertencias: {carga_warnings}")
+        all_server_warnings_bg.extend(carga_warnings)
+        print("--- Log Sherlock (BG Task): Retorno de load_dataframes_from_uploads.")
 
-        print("DataFrames cargados y limpiados preliminarmente desde memoria.")
+        if not processed_dfs_map:
+            print(
+                f"--- Log Sherlock (BG Task): ERROR - No se pudieron cargar DataFrames. Advertencias: {carga_warnings}")
+            return
+
+        print("--- Log Sherlock (BG Task): DataFrames cargados.")
+        print("--- Log Sherlock (BG Task): Llamando a generar_insights_pacientes...")
         final_dataframes_to_save = procesador_datos.generar_insights_pacientes(
-            processed_dfs_map, all_server_warnings)
+            processed_dfs_map, all_server_warnings_bg)
+        print("--- Log Sherlock (BG Task): Retorno de generar_insights_pacientes.")
+
         if not final_dataframes_to_save:
-            _saved_files.clear()
-            _indice_file_content = None
-            _indice_file_name = None
-            raise HTTPException(
-                status_code=400, detail=f"No se pudieron generar los DataFrames de insights. Advertencias: {all_server_warnings}")
+            print(
+                f"--- Log Sherlock (BG Task): ERROR - No se pudieron generar insights. Advertencias: {all_server_warnings_bg}")
+            return
 
         print(
-            f"Insights generados. DataFrames listos para guardar: {list(final_dataframes_to_save.keys())}")
-        saved_tables_summary = {}
-        failed_tables_summary = {}
+            f"--- Log Sherlock (BG Task): Insights generados. DF listos para guardar: {list(final_dataframes_to_save.keys())}")
+
         for table_name_key, df_to_save in final_dataframes_to_save.items():
             nombre_tabla_en_db = table_name_key.lower()
             if df_to_save is not None and not df_to_save.empty:
                 try:
+                    print(
+                        f"--- Log Sherlock (BG Task): Guardando tabla: {nombre_tabla_en_db}, Filas: {len(df_to_save)}")
                     save_df_to_supabase(
                         df_to_save, nombre_tabla_en_db, engine, if_exists='replace')
-                    saved_tables_summary[
-                        nombre_tabla_en_db] = f"Guardado exitoso ({len(df_to_save)} filas)"
                 except Exception as e_save:
-                    error_msg = f"Error al guardar tabla '{nombre_tabla_en_db}': {str(e_save)}"
+                    error_msg = f"--- Log Sherlock (BG Task): ERROR al guardar tabla '{nombre_tabla_en_db}': {str(e_save)}"
                     print(error_msg)
-                    all_server_warnings.append(error_msg)
-                    failed_tables_summary[nombre_tabla_en_db] = str(e_save)
+                    all_server_warnings_bg.append(error_msg)
             else:
-                msg = f"DataFrame para '{nombre_tabla_en_db}' está vacío o es None, no se guardará."
-                print(msg)
-                all_server_warnings.append(msg)
+                # ... (log de df vacío)
+                pass
 
-        if not saved_tables_summary and final_dataframes_to_save and any(not df.empty for df in final_dataframes_to_save.values()):
-            raise HTTPException(
-                status_code=500, detail=f"Se generaron DataFrames pero ninguno pudo ser guardado en Supabase. Errores: {failed_tables_summary}. Advertencias: {all_server_warnings}")
+        print("--- Log Sherlock (BG Task): PROCESO DE GUARDADO EN SUPABASE COMPLETADO ---")
+        if all_server_warnings_bg:
+            print("--- Log Sherlock (BG Task): Advertencias durante la tarea de fondo:")
+            for warn in all_server_warnings_bg:
+                print(warn)
 
-        print("Proceso de guardado en Supabase completado.")
-        _saved_files.clear()
-        _indice_file_content = None
-        _indice_file_name = None
-        print("Almacenamiento temporal en memoria limpiado.")
-        return JSONResponse(content={
-            "message": "Archivos en memoria procesados y datos guardados (o intentado guardar) en Supabase.",
-            "tables_successfully_processed_and_saved": list(saved_tables_summary.keys()),
-            "tables_with_save_errors": failed_tables_summary,
-            "processed_dataframes_generated": list(final_dataframes_to_save.keys()),
-            "server_warnings_and_errors": all_server_warnings
-        }, status_code=200)
-    except HTTPException as http_exc:
-        raise http_exc
     except Exception as e:
-        _saved_files.clear()
-        _indice_file_content = None
-        _indice_file_name = None
         print(
-            f"Error crítico durante el procesamiento de archivos en memoria: {e}")
+            f"--- Log Sherlock (BG Task): ERROR CRÍTICO en tarea de fondo: {str(e)} ---")
         import traceback
         traceback.print_exc()
+    finally:
+        print("--- Log Sherlock (BG Task): FIN TAREA DE FONDO ---")
+
+
+@app.post("/trigger_processing_and_save/")
+# <--- AÑADE background_tasks
+async def trigger_processing_and_save(background_tasks: BackgroundTasks):
+    # Solo para verificar que existan antes de encolar
+    global _saved_files, _indice_file_content, _indice_file_name
+
+    print("--- Log Sherlock: RECIBIDA LLAMADA a /trigger_processing_and_save/ ---")
+
+    if engine is None:
+        # No limpiar globales aquí, la tarea de fondo no se ejecutará.
         raise HTTPException(
-            status_code=500, detail=f"Error interno del servidor al procesar archivos en memoria: {str(e)}")
+            status_code=500, detail="Error de configuración: Conexión a DB no disponible.")
+
+    if not _indice_file_content or not _indice_file_name:
+        # No limpiar globales aquí
+        raise HTTPException(
+            status_code=400, detail="Archivo índice ('indice.xlsx') no encontrado. Sube archivos primero.")
+
+    if not _saved_files:
+        # No limpiar globales aquí
+        raise HTTPException(
+            status_code=400, detail="No hay archivos de datos en memoria. Sube archivos primero.")
+
+    # Añade la función de trabajo pesado a las tareas de fondo
+    # La tarea comenzará DESPUÉS de que esta función de endpoint devuelva la respuesta.
+    background_tasks.add_task(do_the_heavy_processing_and_saving)
+
+    print("--- Log Sherlock: Tarea de procesamiento encolada en segundo plano. Devolviendo 202 a Make. ---")
+    return JSONResponse(
+        # 202 Accepted: La solicitud ha sido aceptada para procesamiento, pero el procesamiento no ha terminado.
+        status_code=202,
+        content={
+            "message": "Solicitud de procesamiento recibida. El trabajo se está realizando en segundo plano."}
+    )
+
+# ... (tu endpoint /ask_sherlock/ se mantiene igual) ...
+
+# (Opcional) Endpoint de "reset_memory" para depuración
+
+
+@app.get("/admin/reset_memory/")
+async def reset_memory_admin():
+    global _saved_files, _indice_file_content, _indice_file_name
+    _saved_files.clear()
+    _indice_file_content = None
+    _indice_file_name = None
+    msg = "--- Log Sherlock: Memoria temporal de archivos limpiada manualmente por admin ---"
+    print(msg)
+    return {"message": msg}
 
 
 @app.post("/ask_sherlock/")

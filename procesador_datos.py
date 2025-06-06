@@ -188,298 +188,49 @@ def generar_insights_pacientes(
 ) -> Dict[str, pd.DataFrame]:
 
     resultados_dfs: Dict[str, pd.DataFrame] = {}
+    print("--- Log Sherlock (BG Task - MODO DIAGNÓSTICO): Inicio de generar_insights_pacientes ---")
     print(
-        f"--- Log Sherlock (BG Task - generar_insights): Inicio. DF limpios disponibles: {list(processed_dfs.keys())}")
+        f"--- Log Sherlock (BG Task - MODO DIAGNÓSTICO): DataFrames limpios disponibles: {list(processed_dfs.keys())}")
 
-    # --- PASO 0: DIAGNÓSTICO DE COLUMNAS ---
-    # Imprimiremos las columnas de los DFs clave tal como llegan de la función de carga.
+    # --- INICIO DEL DIAGNÓSTICO DE COLUMNAS ---
+    # Este bloque solo imprimirá las columnas de cada DataFrame importante y luego los guardará
+    # en Supabase con un prefijo "diagnostico_" para que podamos inspeccionarlos.
     print("\n--- INICIO DIAGNÓSTICO DE COLUMNAS DE DATAFRAMES LIMPIOS ---")
+
     dataframes_a_inspeccionar = [
         "Pacientes_Nuevos_df", "Tipos de pacientes_df", "Lada_df",
         "Citas_Pacientes_df", "Citas_Motivo_df", "Presupuesto por Accion_df",
-        "Acciones_df", "Movimiento_df", "Tabla_Procedimientos_df", "Sucursal_df"
+        "Acciones_df", "Movimiento_df", "Tabla_Procedimientos_df", "Sucursal_df",
+        "Tratamiento Generado Mex_df"
     ]
+
     for df_key in dataframes_a_inspeccionar:
+        # Usamos la función get_df_by_type que ya tienes para obtener el DataFrame
         df_a_inspeccionar = get_df_by_type(
             processed_dfs, df_key, all_advertencias)
+
         if df_a_inspeccionar is not None:
+            # Imprimir la lista de columnas en los logs de Render
             print(
-                f"--- Columnas para '{df_key}': {df_a_inspeccionar.columns.tolist()}")
-    print("--- FIN DIAGNÓSTICO DE COLUMNAS ---\n")
-    # --------------------------------------------
+                f"\n--- Log Sherlock (DIAGNÓSTICO): Columnas para '{df_key}' ---")
+            column_list = df_a_inspeccionar.columns.tolist()
+            print(column_list)
 
-    try:
-        # --- 1. Preparar Tablas de Dimensiones ---
-        dimension_mapping = {
-            "Tipos de pacientes_df": "dimension_tipos_pacientes", "Tabla_Procedimientos_df": "dimension_procedimientos",
-            "Sucursal_df": "dimension_sucursales", "Lada_df": "dimension_lada",
-            "Tratamiento Generado Mex_df": "dimension_tratamientos_generados"
-        }
-        for df_key, table_name in dimension_mapping.items():
-            df_dim = get_df_by_type(processed_dfs, df_key, all_advertencias)
-            if df_dim is not None:
-                resultados_dfs[table_name] = df_dim.copy()
-
-        # --- 2. Procesar Pacientes ---
-        df_pacientes_base = get_df_by_type(
-            processed_dfs, "Pacientes_Nuevos_df", all_advertencias)
-        if df_pacientes_base is None:
-            raise ValueError("'Pacientes_Nuevos_df' no encontrado, abortando.")
-
-        df_pacientes_enriquecido = df_pacientes_base.copy()
-
-        # Calcular Edad
-        col_fecha_nac = 'Fecha de nacimiento'
-        if col_fecha_nac in df_pacientes_enriquecido.columns:
-            # ... (Lógica de cálculo de Edad que ya teníamos y que es robusta) ...
-            df_pacientes_enriquecido[col_fecha_nac] = pd.to_datetime(
-                df_pacientes_enriquecido[col_fecha_nac], errors='coerce')
-            if not df_pacientes_enriquecido[col_fecha_nac].isnull().all():
-                current_time_mex = pd.Timestamp.now(tz='America/Mexico_City')
-                if df_pacientes_enriquecido[col_fecha_nac].dt.tz is None:
-                    df_pacientes_enriquecido[col_fecha_nac] = df_pacientes_enriquecido[col_fecha_nac].dt.tz_localize(
-                        'America/Mexico_City', ambiguous='infer', nonexistent='NaT')
-                else:
-                    df_pacientes_enriquecido[col_fecha_nac] = df_pacientes_enriquecido[col_fecha_nac].dt.tz_convert(
-                        'America/Mexico_City')
-                time_difference = current_time_mex - \
-                    df_pacientes_enriquecido[col_fecha_nac]
-                if not time_difference.isnull().all():
-                    df_pacientes_enriquecido['Edad'] = (
-                        time_difference / pd.Timedelta(days=1) / 365.25).astype('Int64')
-                    print(f"--- Log Sherlock (BG Task): Columna 'Edad' calculada.")
+            # Guardamos una copia del DataFrame limpio para inspeccionarlo en Supabase si es necesario
+            # Le ponemos un prefijo para saber que es de esta prueba de diagnóstico.
+            resultados_dfs[f"diagnostico_{df_key.lower()}"] = df_a_inspeccionar.copy(
+            )
         else:
-            all_advertencias.append(
-                f"Advertencia de Diagnóstico: Columna '{col_fecha_nac}' NO encontrada en Pacientes_Nuevos_df.")
-            df_pacientes_enriquecido['Edad'] = pd.NA
-
-        # Enriquecer con Origen
-        # ... (La lógica de enriquecimiento que ya teníamos, la cual depende de los nombres correctos) ...
-        col_tipo_dentalink = 'Tipo Dentalink'
-        col_origen = 'Paciente_Origen'
-        if 'dimension_tipos_pacientes' in resultados_dfs and col_tipo_dentalink in df_pacientes_enriquecido.columns:
-            df_dim_tipos_pac = resultados_dfs['dimension_tipos_pacientes']
-            if col_tipo_dentalink in df_dim_tipos_pac.columns and col_origen in df_dim_tipos_pac.columns:
-                df_origen_merge = df_dim_tipos_pac[[
-                    col_tipo_dentalink, col_origen]].drop_duplicates(subset=[col_tipo_dentalink])
-                df_pacientes_enriquecido = pd.merge(
-                    df_pacientes_enriquecido, df_origen_merge, on=col_tipo_dentalink, how='left')
-
-        resultados_dfs['hechos_pacientes'] = df_pacientes_enriquecido.copy()
-
-  # Dentro de la función generar_insights_pacientes, REEMPLAZA la sección de citas con esto:
-
-    # --- 3. Procesar y Enriquecer DataFrame de Citas ---
-    print(f"--- Log Sherlock (BG Task - generar_insights): Iniciando procesamiento de Citas...")
-    df_citas_pac_base = get_df_by_type(
-        processed_dfs, "Citas_Pacientes_df", all_advertencias)
-    df_citas_mot_base = get_df_by_type(
-        processed_dfs, "Citas_Motivo_df", all_advertencias)
-
-    # INICIALIZAMOS LA VARIABLE A NONE PARA EVITAR EL ERROR "is not defined"
-    hechos_citas_df = None
-
-    if df_citas_pac_base is not None and df_citas_mot_base is not None:
-        try:
-            # Nombres de columna unificados de tu índice (verifica que sean exactos)
-            col_id_cita = 'ID_Cita'
-            col_id_paciente_citas = 'ID_Paciente'
-            col_fecha_cita = 'Fecha Cita'
-            col_cita_asistida_unif = 'Cita_asistida'
-            col_cita_duplicada_unif = 'Cita duplicada'
-            col_fecha_creacion_cita_unif = 'Fecha de creación cita'
-            col_sucursal_cita_unif = 'Sucursal'
-            col_id_trat_cita_unif = 'ID_Tratamiento'
-
-            # a. Pre-procesamiento y validación de columnas
-            cols_nec_citaspac = [col_id_cita, col_id_paciente_citas,
-                                 col_fecha_cita, col_cita_asistida_unif, col_cita_duplicada_unif]
-            cols_nec_citasmot = [col_id_cita, col_fecha_creacion_cita_unif,
-                                 col_sucursal_cita_unif, col_id_trat_cita_unif]
-
-            if not all(c in df_citas_pac_base.columns for c in cols_nec_citaspac) or \
-               not all(c in df_citas_mot_base.columns for c in cols_nec_citasmot):
-                all_advertencias.append(
-                    "ADVERTENCIA: Faltan columnas en DFs de Citas. Abortando procesamiento de citas.")
-                raise ValueError(
-                    "Faltan columnas base para procesar citas. Revisa los logs de diagnóstico de columnas.")
-
-            # b. Limpieza y conversión de tipos
-            df_citas_pac_base[col_cita_asistida_unif] = pd.to_numeric(
-                df_citas_pac_base[col_cita_asistida_unif], errors='coerce').fillna(0).astype(int)
-            df_citas_pac_base[col_cita_duplicada_unif] = pd.to_numeric(
-                df_citas_pac_base[col_cita_duplicada_unif], errors='coerce').fillna(0).astype(int)
-            df_citas_pac_filtrado = df_citas_pac_base[df_citas_pac_base[col_cita_duplicada_unif] == 0].copy(
-            )
+            # Esto nos dirá si alguno de los DataFrames base ni siquiera se está creando.
             print(
-                f"--- Log Sherlock (BG Task - generar_insights): Citas_Pacientes_df filtrado (sin duplicados): {len(df_citas_pac_filtrado)} filas.")
+                f"\n--- Log Sherlock (DIAGNÓSTICO): DataFrame '{df_key}' NO fue encontrado en processed_dfs.\n")
 
-            # c. Merge de DFs de Citas
-            df_citas_pac_filtrado[col_id_cita] = df_citas_pac_filtrado[col_id_cita].astype(
-                str)
-            df_citas_mot_base[col_id_cita] = df_citas_mot_base[col_id_cita].astype(
-                str)
+    print("--- FIN DIAGNÓSTICO DE COLUMNAS ---\n")
+    # --- FIN DEL DIAGNÓSTICO ---
 
-            columnas_de_citas_motivo_a_unir_existentes = [
-                c for c in cols_nec_citasmot if c in df_citas_mot_base.columns]
+    all_advertencias.append(
+        "MODO DIAGNÓSTICO COMPLETADO: Se imprimieron las columnas de los DFs limpios en los logs. Revisa los logs de Render.")
+    print("--- Log Sherlock (BG Task - MODO DIAGNÓSTICO): Fin. Devolviendo DFs limpios para inspección.")
 
-            hechos_citas_df = pd.merge(
-                df_citas_pac_filtrado,
-                df_citas_mot_base[columnas_de_citas_motivo_a_unir_existentes].drop_duplicates(
-                    subset=[col_id_cita]),
-                on=col_id_cita, how='left'
-            )
-            print(
-                f"--- Log Sherlock (BG Task - generar_insights): Merge Citas_Pacientes y Citas_Motivo. Filas: {len(hechos_citas_df)}")
-
-            # d. Calcular Fecha_Primera_Cita_Atendida_Real
-            hechos_citas_df[col_fecha_cita] = pd.to_datetime(
-                hechos_citas_df[col_fecha_cita], errors='coerce')
-            df_atendidas_calc = hechos_citas_df[(
-                hechos_citas_df[col_cita_asistida_unif] == 1) & pd.notna(hechos_citas_df[col_fecha_cita])]
-            if not df_atendidas_calc.empty:
-                primera_cita_atendida = df_atendidas_calc.groupby(
-                    col_id_paciente_citas)[col_fecha_cita].min().reset_index()
-                primera_cita_atendida.rename(
-                    columns={col_fecha_cita: 'Fecha_Primera_Cita_Atendida_Real'}, inplace=True)
-                hechos_citas_df[col_id_paciente_citas] = hechos_citas_df[col_id_paciente_citas].astype(
-                    str)
-                primera_cita_atendida[col_id_paciente_citas] = primera_cita_atendida[col_id_paciente_citas].astype(
-                    str)
-                hechos_citas_df = pd.merge(
-                    hechos_citas_df, primera_cita_atendida, on=col_id_paciente_citas, how='left')
-            else:
-                hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'] = pd.NaT
-
-            # e. Etiquetar cada cita
-            # ... (Toda la lógica de etiquetado con .loc que ya teníamos) ...
-            today = pd.Timestamp('today').normalize()
-            hechos_citas_df['Etiqueta_Cita_Paciente'] = 'Indeterminada'
-            cond_nunca_atendido_antes = hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].isnull(
-            )
-            cond_esta_es_primera_atendida = (hechos_citas_df[col_fecha_cita].notnull() & hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].notnull(
-            ) & (hechos_citas_df[col_fecha_cita] == hechos_citas_df['Fecha_Primera_Cita_Atendida_Real']))
-            cond_paciente_es_nuevo_para_esta_cita = cond_nunca_atendido_antes | cond_esta_es_primera_atendida
-            hechos_citas_df.loc[cond_paciente_es_nuevo_para_esta_cita & (
-                hechos_citas_df[col_fecha_cita] >= today), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo en Agenda"
-            hechos_citas_df.loc[cond_paciente_es_nuevo_para_esta_cita & (hechos_citas_df[col_fecha_cita] < today) & (
-                hechos_citas_df[col_cita_asistida_unif] == 1), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo Atendido"
-            hechos_citas_df.loc[cond_paciente_es_nuevo_para_esta_cita & (hechos_citas_df[col_fecha_cita] < today) & (
-                hechos_citas_df[col_cita_asistida_unif] == 0), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo No Atendido"
-            cond_paciente_es_recurrente = (~cond_paciente_es_nuevo_para_esta_cita) & (hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].notnull()) & (
-                hechos_citas_df[col_fecha_cita].notnull() & (hechos_citas_df[col_fecha_cita] > hechos_citas_df['Fecha_Primera_Cita_Atendida_Real']))
-            cond_mismo_mes_debut = hechos_citas_df[col_fecha_cita].notnull() & hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].notnull(
-            ) & (hechos_citas_df[col_fecha_cita].dt.to_period('M') == hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].dt.to_period('M'))
-            hechos_citas_df.loc[cond_paciente_es_recurrente & cond_mismo_mes_debut & (
-                hechos_citas_df[col_cita_asistida_unif] == 1), 'Etiqueta_Cita_Paciente'] = "Paciente Atendido Mismo Mes que Debutó"
-            hechos_citas_df.loc[cond_paciente_es_recurrente & (~cond_mismo_mes_debut) & (
-                hechos_citas_df[col_fecha_cita] >= today), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente en Agenda"
-            hechos_citas_df.loc[cond_paciente_es_recurrente & (~cond_mismo_mes_debut) & (hechos_citas_df[col_fecha_cita] < today) & (
-                hechos_citas_df[col_cita_asistida_unif] == 1), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente Atendido"
-            hechos_citas_df.loc[cond_paciente_es_recurrente & (~cond_mismo_mes_debut) & (hechos_citas_df[col_fecha_cita] < today) & (
-                hechos_citas_df[col_cita_asistida_unif] == 0), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente No Atendido"
-
-            print(
-                f"--- Log Sherlock (BG Task - generar_insights): Etiquetas de citas calculadas.")
-
-        except KeyError as e_key_citas:
-            all_advertencias.append(
-                f"ERROR DE CLAVE procesando citas: No se encontró la columna {e_key_citas}. Se aborta el procesamiento de citas.")
-            print(
-                f"--- Log Sherlock (BG Task - generar_insights): ERROR DE CLAVE procesando citas: No se encontró la columna {e_key_citas}.")
-            # `hechos_citas_df` se mantendrá como None
-        except Exception as e_citas:
-            all_advertencias.append(f"Error procesando citas: {e_citas}")
-            print(
-                f"--- Log Sherlock (BG Task - generar_insights): ERROR general procesando citas: {e_citas}")
-            # `hechos_citas_df` podría tener un estado intermedio o ser None, dependiendo de dónde ocurrió el error.
-            # Por seguridad, lo reseteamos a None.
-            hechos_citas_df = None
-            import traceback
-            traceback.print_exc()
-
-    else:
-        if df_citas_pac_base is None:
-            all_advertencias.append(
-                "ADVERTENCIA: DataFrame 'Citas_Pacientes_df' no disponible.")
-        if df_citas_mot_base is None:
-            all_advertencias.append(
-                "ADVERTENCIA: DataFrame 'Citas_Motivo_df' no disponible.")
-
-    # Al final de la sección, añadir el DF de citas a los resultados SOLO SI SE CREÓ
-    if hechos_citas_df is not None:
-        if 'Fecha_Primera_Cita_Atendida_Real' not in hechos_citas_df.columns:
-            # Asegurar que la columna exista
-            hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'] = pd.NaT
-        resultados_dfs['hechos_citas'] = hechos_citas_df.copy()
-        print(
-            f"--- Log Sherlock (BG Task - generar_insights): 'hechos_citas' preparado con {len(hechos_citas_df)} filas.")
-
-        # --- 4. Procesar Presupuestos, Acciones, Pagos ---
-        # Presupuestos
-        df_presupuestos = get_df_by_type(
-            processed_dfs, "Presupuesto por Accion_df", all_advertencias)
-        if df_presupuestos is not None:
-            # Aquí iría el enriquecimiento con detalles de procedimiento y paciente,
-            # una vez que confirmemos los nombres de las columnas.
-            # Por ejemplo, para el descuento:
-            col_precio_orig = 'Procedimiento_precio_original'
-            col_precio_pac = 'Procedimiento_precio_paciente'
-            if col_precio_orig in df_presupuestos.columns and col_precio_pac in df_presupuestos.columns:
-                df_presupuestos[col_precio_orig] = pd.to_numeric(
-                    df_presupuestos[col_precio_orig], errors='coerce')
-                df_presupuestos[col_precio_pac] = pd.to_numeric(
-                    df_presupuestos[col_precio_pac], errors='coerce')
-                df_presupuestos['Descuento_Presupuestado_Detalle'] = df_presupuestos[col_precio_orig] - \
-                    df_presupuestos[col_precio_pac]
-                print(
-                    "--- Log Sherlock (BG Task): Columna 'Descuento_Presupuestado_Detalle' calculada.")
-            else:
-                all_advertencias.append(
-                    f"Advertencia de Diagnóstico: Columnas para descuento ('{col_precio_orig}', '{col_precio_pac}') NO encontradas en Presupuesto por Accion_df.")
-
-            resultados_dfs['hechos_presupuesto_detalle'] = df_presupuestos.copy()
-
-        # ... (Lógica similar para Acciones y Pagos) ...
-
-        # --- 5. Generar Perfiles ---
-        if 'hechos_pacientes' in resultados_dfs:
-            df_pac_para_perfil = resultados_dfs['hechos_pacientes']
-            col_id_pac = 'ID_Paciente'
-            col_edad = 'Edad'
-            col_sexo = 'Sexo'
-            col_origen_pac = 'Paciente_Origen'
-
-            groupby_cols = []
-            if col_edad in df_pac_para_perfil.columns:
-                groupby_cols.append(col_edad)
-            if col_sexo in df_pac_para_perfil.columns:
-                groupby_cols.append(col_sexo)
-            if col_origen_pac in df_pac_para_perfil.columns:
-                groupby_cols.append(col_origen_pac)
-
-            if col_id_pac in df_pac_para_perfil.columns and len(groupby_cols) > 1:
-                perfil = df_pac_para_perfil.groupby(groupby_cols, dropna=False)[
-                    col_id_pac].nunique().reset_index(name='Numero_Pacientes')
-                if not perfil.empty:
-                    resultados_dfs['perfil_edad_sexo_origen_paciente'] = perfil
-            else:
-                all_advertencias.append(
-                    "Advertencia de Diagnóstico: Faltan columnas para generar el perfil de paciente.")
-
-    except KeyError as e:
-        print(
-            f"--- Log Sherlock (BG Task - generar_insights): ¡¡¡ERROR DE CLAVE (KeyError)!!! No se encontró la columna: {e}")
-        all_advertencias.append(
-            f"FATAL: No se encontró la columna {e}. El proceso de enriquecimiento se detuvo.")
-        # Imprimir las columnas del DataFrame que podría estar causando el problema si podemos identificarlo
-    except Exception as e_general:
-        print(
-            f"--- Log Sherlock (BG Task - generar_insights): ¡¡¡ERROR GENERAL!!! Ocurrió un error inesperado: {e_general}")
-        import traceback
-        traceback.print_exc()
-        all_advertencias.append(f"FATAL: Error inesperado: {e_general}")
-
-    print(
-        f"--- Log Sherlock (BG Task - generar_insights): Fin. DataFrames finales listos ({len(resultados_dfs)}): {list(resultados_dfs.keys())}")
+    # La función termina aquí, devolviendo los DFs sin enriquecer para esta prueba.
     return resultados_dfs

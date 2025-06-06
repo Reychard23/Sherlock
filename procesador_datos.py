@@ -181,8 +181,6 @@ def get_df_by_type(
 
 # --- Función 3: El Cerebro del Procesamiento y Enriquecimiento ---
 
-# En procesador_datos.py, REEMPLAZA la función generar_insights_pacientes con ESTA versión final de diagnóstico y procesamiento
-
 
 def generar_insights_pacientes(
     processed_dfs: Dict[str, pd.DataFrame],
@@ -190,161 +188,45 @@ def generar_insights_pacientes(
 ) -> Dict[str, pd.DataFrame]:
 
     resultados_dfs: Dict[str, pd.DataFrame] = {}
+    print("--- Log Sherlock (BG Task - MODO DIAGNÓSTICO): Inicio de generar_insights_pacientes ---")
     print(
-        f"--- Log Sherlock (BG Task - generar_insights): Inicio. DF limpios disponibles: {list(processed_dfs.keys())}")
+        f"--- Log Sherlock (BG Task - MODO DIAGNÓSTICO): DataFrames limpios disponibles: {list(processed_dfs.keys())}")
 
-    # --- PASO 0: DIAGNÓSTICO DE COLUMNAS ---
-    # Imprimiremos las columnas de los DFs clave tal como llegan de la función de carga.
+    # --- INICIO DEL DIAGNÓSTICO DE COLUMNAS ---
+    # Este bloque solo imprimirá las columnas de cada DataFrame importante y luego los guardará
+    # en Supabase con un prefijo "diagnostico_" para que podamos inspeccionarlos.
     print("\n--- INICIO DIAGNÓSTICO DE COLUMNAS DE DATAFRAMES LIMPIOS ---")
+
     dataframes_a_inspeccionar = [
         "Pacientes_Nuevos_df", "Tipos de pacientes_df", "Lada_df",
         "Citas_Pacientes_df", "Citas_Motivo_df", "Presupuesto por Accion_df",
-        "Acciones_df", "Movimiento_df", "Tabla_Procedimientos_df", "Sucursal_df"
+        "Acciones_df", "Movimiento_df", "Tabla_Procedimientos_df", "Sucursal_df",
+        "Tratamiento Generado Mex_df"
     ]
+
     for df_key in dataframes_a_inspeccionar:
         df_a_inspeccionar = get_df_by_type(
             processed_dfs, df_key, all_advertencias)
+
         if df_a_inspeccionar is not None:
+            # Imprimir la lista de columnas en los logs de Render
             print(
-                f"--- Columnas para '{df_key}': {df_a_inspeccionar.columns.tolist()}")
-    print("--- FIN DIAGNÓSTICO DE COLUMNAS ---\n")
-    # --------------------------------------------
+                f"\n--- Log Sherlock (DIAGNÓSTICO): Columnas para '{df_key}' ---")
+            column_list = df_a_inspeccionar.columns.tolist()
+            print(column_list)
 
-    try:
-        # --- 1. Preparar Tablas de Dimensiones ---
-        dimension_mapping = {
-            "Tipos de pacientes_df": "dimension_tipos_pacientes", "Tabla_Procedimientos_df": "dimension_procedimientos",
-            "Sucursal_df": "dimension_sucursales", "Lada_df": "dimension_lada",
-            "Tratamiento Generado Mex_df": "dimension_tratamientos_generados"
-        }
-        for df_key, table_name in dimension_mapping.items():
-            df_dim = get_df_by_type(processed_dfs, df_key, all_advertencias)
-            if df_dim is not None:
-                resultados_dfs[table_name] = df_dim.copy()
-
-        # --- 2. Procesar Pacientes ---
-        df_pacientes_base = get_df_by_type(
-            processed_dfs, "Pacientes_Nuevos_df", all_advertencias)
-        if df_pacientes_base is None:
-            raise ValueError("'Pacientes_Nuevos_df' no encontrado, abortando.")
-
-        df_pacientes_enriquecido = df_pacientes_base.copy()
-
-        # Calcular Edad
-        col_fecha_nac = 'Fecha de nacimiento'
-        if col_fecha_nac in df_pacientes_enriquecido.columns:
-            # ... (Lógica de cálculo de Edad que ya teníamos y que es robusta) ...
-            df_pacientes_enriquecido[col_fecha_nac] = pd.to_datetime(
-                df_pacientes_enriquecido[col_fecha_nac], errors='coerce')
-            if not df_pacientes_enriquecido[col_fecha_nac].isnull().all():
-                current_time_mex = pd.Timestamp.now(tz='America/Mexico_City')
-                if df_pacientes_enriquecido[col_fecha_nac].dt.tz is None:
-                    df_pacientes_enriquecido[col_fecha_nac] = df_pacientes_enriquecido[col_fecha_nac].dt.tz_localize(
-                        'America/Mexico_City', ambiguous='infer', nonexistent='NaT')
-                else:
-                    df_pacientes_enriquecido[col_fecha_nac] = df_pacientes_enriquecido[col_fecha_nac].dt.tz_convert(
-                        'America/Mexico_City')
-                time_difference = current_time_mex - \
-                    df_pacientes_enriquecido[col_fecha_nac]
-                if not time_difference.isnull().all():
-                    df_pacientes_enriquecido['Edad'] = (
-                        time_difference / pd.Timedelta(days=1) / 365.25).astype('Int64')
-                    print(f"--- Log Sherlock (BG Task): Columna 'Edad' calculada.")
+            # Guardamos una copia del DataFrame limpio para inspeccionarlo en Supabase
+            resultados_dfs[f"diagnostico_{df_key.lower()}"] = df_a_inspeccionar.copy(
+            )
         else:
-            all_advertencias.append(
-                f"Advertencia de Diagnóstico: Columna '{col_fecha_nac}' NO encontrada en Pacientes_Nuevos_df.")
-            df_pacientes_enriquecido['Edad'] = pd.NA
+            print(
+                f"\n--- Log Sherlock (DIAGNÓSTICO): DataFrame '{df_key}' NO fue encontrado en processed_dfs.\n")
 
-        # Enriquecer con Origen
-        # ... (La lógica de enriquecimiento que ya teníamos, la cual depende de los nombres correctos) ...
-        col_tipo_dentalink = 'Tipo Dentalink'
-        col_origen = 'Paciente_Origen'
-        if 'dimension_tipos_pacientes' in resultados_dfs and col_tipo_dentalink in df_pacientes_enriquecido.columns:
-            df_dim_tipos_pac = resultados_dfs['dimension_tipos_pacientes']
-            if col_tipo_dentalink in df_dim_tipos_pac.columns and col_origen in df_dim_tipos_pac.columns:
-                df_origen_merge = df_dim_tipos_pac[[
-                    col_tipo_dentalink, col_origen]].drop_duplicates(subset=[col_tipo_dentalink])
-                df_pacientes_enriquecido = pd.merge(
-                    df_pacientes_enriquecido, df_origen_merge, on=col_tipo_dentalink, how='left')
+    print("--- FIN DIAGNÓSTICO DE COLUMNAS ---\n")
+    # --- FIN DEL DIAGNÓSTICO ---
 
-        resultados_dfs['hechos_pacientes'] = df_pacientes_enriquecido.copy()
+    all_advertencias.append(
+        "MODO DIAGNÓSTICO COMPLETADO: Se imprimieron las columnas de los DFs limpios en los logs. Revisa los logs de Render.")
+    print("--- Log Sherlock (BG Task - MODO DIAGNÍSTICO): Fin. Devolviendo DFs limpios para inspección.")
 
-        # --- 3. Procesar Citas ---
-        df_citas_pac = get_df_by_type(
-            processed_dfs, "Citas_Pacientes_df", all_advertencias)
-        df_citas_mot = get_df_by_type(
-            processed_dfs, "Citas_Motivo_df", all_advertencias)
-        if df_citas_pac is not None and df_citas_mot is not None:
-            # ... (Toda la lógica para procesar citas que ya teníamos) ...
-            # ... (Filtrar duplicados, merge, calcular primera cita, etiquetar) ...
-            # Asumiendo que hechos_citas_df se crea correctamente
-            resultados_dfs['hechos_citas'] = hechos_citas_df.copy()
-
-        # --- 4. Procesar Presupuestos, Acciones, Pagos ---
-        # Presupuestos
-        df_presupuestos = get_df_by_type(
-            processed_dfs, "Presupuesto por Accion_df", all_advertencias)
-        if df_presupuestos is not None:
-            # Aquí iría el enriquecimiento con detalles de procedimiento y paciente,
-            # una vez que confirmemos los nombres de las columnas.
-            # Por ejemplo, para el descuento:
-            col_precio_orig = 'Procedimiento_precio_original'
-            col_precio_pac = 'Procedimiento_precio_paciente'
-            if col_precio_orig in df_presupuestos.columns and col_precio_pac in df_presupuestos.columns:
-                df_presupuestos[col_precio_orig] = pd.to_numeric(
-                    df_presupuestos[col_precio_orig], errors='coerce')
-                df_presupuestos[col_precio_pac] = pd.to_numeric(
-                    df_presupuestos[col_precio_pac], errors='coerce')
-                df_presupuestos['Descuento_Presupuestado_Detalle'] = df_presupuestos[col_precio_orig] - \
-                    df_presupuestos[col_precio_pac]
-                print(
-                    "--- Log Sherlock (BG Task): Columna 'Descuento_Presupuestado_Detalle' calculada.")
-            else:
-                all_advertencias.append(
-                    f"Advertencia de Diagnóstico: Columnas para descuento ('{col_precio_orig}', '{col_precio_pac}') NO encontradas en Presupuesto por Accion_df.")
-
-            resultados_dfs['hechos_presupuesto_detalle'] = df_presupuestos.copy()
-
-        # ... (Lógica similar para Acciones y Pagos) ...
-
-        # --- 5. Generar Perfiles ---
-        if 'hechos_pacientes' in resultados_dfs:
-            df_pac_para_perfil = resultados_dfs['hechos_pacientes']
-            col_id_pac = 'ID_Paciente'
-            col_edad = 'Edad'
-            col_sexo = 'Sexo'
-            col_origen_pac = 'Paciente_Origen'
-
-            groupby_cols = []
-            if col_edad in df_pac_para_perfil.columns:
-                groupby_cols.append(col_edad)
-            if col_sexo in df_pac_para_perfil.columns:
-                groupby_cols.append(col_sexo)
-            if col_origen_pac in df_pac_para_perfil.columns:
-                groupby_cols.append(col_origen_pac)
-
-            if col_id_pac in df_pac_para_perfil.columns and len(groupby_cols) > 1:
-                perfil = df_pac_para_perfil.groupby(groupby_cols, dropna=False)[
-                    col_id_pac].nunique().reset_index(name='Numero_Pacientes')
-                if not perfil.empty:
-                    resultados_dfs['perfil_edad_sexo_origen_paciente'] = perfil
-            else:
-                all_advertencias.append(
-                    "Advertencia de Diagnóstico: Faltan columnas para generar el perfil de paciente.")
-
-    except KeyError as e:
-        print(
-            f"--- Log Sherlock (BG Task - generar_insights): ¡¡¡ERROR DE CLAVE (KeyError)!!! No se encontró la columna: {e}")
-        all_advertencias.append(
-            f"FATAL: No se encontró la columna {e}. El proceso de enriquecimiento se detuvo.")
-        # Imprimir las columnas del DataFrame que podría estar causando el problema si podemos identificarlo
-    except Exception as e_general:
-        print(
-            f"--- Log Sherlock (BG Task - generar_insights): ¡¡¡ERROR GENERAL!!! Ocurrió un error inesperado: {e_general}")
-        import traceback
-        traceback.print_exc()
-        all_advertencias.append(f"FATAL: Error inesperado: {e_general}")
-
-    print(
-        f"--- Log Sherlock (BG Task - generar_insights): Fin. DataFrames finales listos ({len(resultados_dfs)}): {list(resultados_dfs.keys())}")
     return resultados_dfs

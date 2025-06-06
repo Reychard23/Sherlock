@@ -152,20 +152,42 @@ def generar_insights_pacientes(
         if df_pacientes_base is not None:
             df_pacientes_enriquecido = df_pacientes_base.copy()
             # Calcular Edad
-            if 'Fecha de nacimiento' in df_pacientes_enriquecido.columns:
-                fechas_nacimiento = pd.to_datetime(
-                    df_pacientes_enriquecido['Fecha de nacimiento'], errors='coerce')
-                if not fechas_nacimiento.isnull().all():
-                    if fechas_nacimiento.dt.tz is None:
-                        fechas_nacimiento = fechas_nacimiento.dt.tz_localize(
-                            'America/Mexico_City', ambiguous='infer', nonexistent='NaT')
-                    time_difference_days = (pd.Timestamp.now(
-                        tz='America/Mexico_City') - fechas_nacimiento) / pd.Timedelta(days=1)
-                    edad_float = (time_difference_days /
-                                  365.25).replace([np.inf, -np.inf], np.nan)
-                    df_pacientes_enriquecido['Edad'] = edad_float.astype(
+            col_fecha_nac = 'Fecha de nacimiento'
+            if col_fecha_nac in df_pacientes_enriquecido.columns:
+                try:
+                    # Paso 1: Convertir a datetime. Los errores se vuelven NaT (Not a Time), que es un tipo de objeto.
+                    fechas_nacimiento = pd.to_datetime(
+                        df_pacientes_enriquecido[col_fecha_nac], errors='coerce')
+
+                    # Paso 2: Realizar la resta. El resultado será una Serie de Timedeltas o NaT.
+                    time_difference = pd.Timestamp.now(tz='America/Mexico_City') - fechas_nacimiento.dt.tz_localize(
+                        'America/Mexico_City', ambiguous='infer', nonexistent='NaT')
+
+                    # Paso 3: Convertir la diferencia a años (float). Esto convertirá los NaT en NaN (Not a Number, que es un float).
+                    edad_float = time_difference / pd.Timedelta(days=365.25)
+
+                    # Paso 4: ¡LA CORRECCIÓN CLAVE! Forzar la conversión a numérico OTRA VEZ.
+                    # Esto maneja cualquier valor "raro" que no sea un número ni un NaN, convirtiéndolo en NaN.
+                    edad_numeric = pd.to_numeric(edad_float, errors='coerce')
+
+                    # Paso 5: Ahora que estamos seguros de que solo hay floats y NaNs, podemos convertir a entero nullable.
+                    df_pacientes_enriquecido['Edad'] = edad_numeric.astype(
                         'Int64')
-                    print("--- Log Sherlock (BG Task): Columna 'Edad' calculada.")
+                    print(
+                        f"--- Log Sherlock (BG Task): Columna 'Edad' calculada exitosamente.")
+
+                except Exception as e_edad:
+                    all_advertencias.append(
+                        f"Advertencia: Error final al calcular Edad: {e_edad}")
+                    df_pacientes_enriquecido['Edad'] = pd.NA
+                    import traceback
+                    print("--- TRACEBACK ERROR EDAD ---")
+                    traceback.print_exc()
+                    print("--- FIN TRACEBACK ---")
+            else:
+                all_advertencias.append(
+                    f"Advertencia: Columna '{col_fecha_nac}' no encontrada en Pacientes.")
+                df_pacientes_enriquecido['Edad'] = pd.NA
             # Enriquecer con Origen
             if 'dimension_tipos_pacientes' in resultados_dfs and 'Tipo Dentalink' in df_pacientes_enriquecido.columns:
                 df_dim_tipos_pac = resultados_dfs['dimension_tipos_pacientes']

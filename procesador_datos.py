@@ -10,14 +10,11 @@ from typing import Dict, Any, List, Optional, Tuple, Set
 def load_dataframes_from_uploads(
     data_files: List[Any], index_file: Any
 ) -> Tuple[Dict[str, pd.DataFrame], Dict[tuple[str, str], dict[str, str]], set[tuple[str, str, str]], List[str]]:
-
     processed_dfs: Dict[str, pd.DataFrame] = {}
     advertencias_carga: List[str] = []
     rename_map_details: Dict[tuple[str, str], dict[str, str]] = {}
     drop_columns_set: set[tuple[str, str, str]] = set()
 
-    print(
-        f"--- Log Sherlock (BG Task - load_data): Leyendo índice (Excel): {index_file.filename}")
     try:
         index_file.file.seek(0)
         indice_df = pd.read_excel(io.BytesIO(
@@ -38,6 +35,7 @@ def load_dataframes_from_uploads(
             original_col_idx = str(row[col_map['Original_Idx']]).strip()
             nuevo_col_idx = str(row[col_map['Nuevo_Idx']]).strip()
             accion_val_idx = str(row[col_map['Accion_Idx']]).strip().upper()
+
             if accion_val_idx == 'DROP':
                 drop_columns_set.add(
                     (archivo_base_idx, hoja_idx, original_col_idx))
@@ -54,10 +52,8 @@ def load_dataframes_from_uploads(
         traceback.print_exc()
         return {}, {}, set(), advertencias_carga
 
-    for i_file, uploaded_file_obj in enumerate(data_files):
+    for uploaded_file_obj in data_files:
         original_filename = uploaded_file_obj.filename
-        print(
-            f"--- Log Sherlock (BG Task - load_data): ({i_file+1}/{len(data_files)}) Procesando: {original_filename}")
         try:
             base_name, _ = os.path.splitext(original_filename)
             df_sheets = pd.read_excel(io.BytesIO(
@@ -86,7 +82,6 @@ def load_dataframes_from_uploads(
                     advertencias_carga.append(
                         f"ADVERTENCIA: DF '{df_key_name}' ya existe. Se SOBREESCRIBIRÁ.")
                 processed_dfs[df_key_name] = df_cleaned
-                print(f"      DataFrame '{df_key_name}' almacenado.")
                 break
         except Exception as e_file:
             msg = f"ERROR procesando archivo de datos '{original_filename}': {e_file}"
@@ -95,7 +90,6 @@ def load_dataframes_from_uploads(
             import traceback
             traceback.print_exc()
 
-    print("--- Log Sherlock (BG Task - load_data): FIN de carga y limpieza inicial de DataFrames ---")
     return processed_dfs, rename_map_details, drop_columns_set, advertencias_carga
 
 # --- Función 2: Utilidad para Obtener DF ---
@@ -103,8 +97,6 @@ def load_dataframes_from_uploads(
 
 def get_df_by_type(processed_dfs: Dict[str, pd.DataFrame], df_key_buscado: str, advertencias_list: List[str]) -> Optional[pd.DataFrame]:
     if df_key_buscado in processed_dfs:
-        print(
-            f"--- Log Sherlock (BG Task - get_df): DataFrame '{df_key_buscado}' encontrado.")
         return processed_dfs[df_key_buscado].copy()
     else:
         msg = f"ADVERTENCIA: No se encontró DataFrame '{df_key_buscado}'. Disponibles: {list(processed_dfs.keys())}"
@@ -150,16 +142,15 @@ def generar_insights_pacientes(
                         ) - pd.Timestamp(fecha_nac).normalize()).days
                         edad = int(edad_dias / 365.25)
                         return edad if 0 <= edad <= 120 else pd.NA
-                    except (ValueError, TypeError):
+                    except:
                         return pd.NA
                 df_pacientes_enriquecido['Edad'] = pd.to_datetime(
                     df_pacientes_enriquecido['Fecha de nacimiento'], errors='coerce').apply(calcular_edad).astype('Int64')
-                print(f"--- Log Sherlock (BG Task): Columna 'Edad' calculada.")
             # Enriquecer con Origen
             if 'dimension_tipos_pacientes' in resultados_dfs and 'Tipo Dentalink' in df_pacientes_enriquecido.columns:
-                df_dim_tipos = resultados_dfs['dimension_tipos_pacientes']
-                if 'Tipo Dentalink' in df_dim_tipos.columns and 'Paciente_Origen' in df_dim_tipos.columns:
-                    df_origen_merge = df_dim_tipos[[
+                df_dim_tipos_pac = resultados_dfs['dimension_tipos_pacientes']
+                if 'Tipo Dentalink' in df_dim_tipos_pac.columns and 'Paciente_Origen' in df_dim_tipos_pac.columns:
+                    df_origen_merge = df_dim_tipos_pac[[
                         'Tipo Dentalink', 'Paciente_Origen']].drop_duplicates(subset=['Tipo Dentalink'])
                     df_pacientes_enriquecido = pd.merge(
                         df_pacientes_enriquecido, df_origen_merge, on='Tipo Dentalink', how='left')
@@ -178,10 +169,9 @@ def generar_insights_pacientes(
             df_citas_filtrado = df_citas_pac[df_citas_pac['Cita duplicada'] == 0].copy(
             )
 
-            df_citas_filtrado.loc[:, 'ID_Cita'] = df_citas_filtrado['ID_Cita'].astype(
+            df_citas_filtrado['ID_Cita'] = df_citas_filtrado['ID_Cita'].astype(
                 str)
-            df_citas_mot.loc[:,
-                             'ID_Cita'] = df_citas_mot['ID_Cita'].astype(str)
+            df_citas_mot['ID_Cita'] = df_citas_mot['ID_Cita'].astype(str)
 
             cols_from_motivo = ['ID_Cita', 'Fecha de creación cita', 'Hora Inicio Cita',
                                 'Hora Fin Cita', 'Motivo Cita', 'Sucursal', 'ID_Tratamiento']
@@ -202,10 +192,27 @@ def generar_insights_pacientes(
             if 'Fecha_Primera_Cita_Atendida_Real' not in hechos_citas_df.columns:
                 hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'] = pd.NaT
 
-            # Lógica de Etiquetado...
             today = pd.to_datetime('today').normalize()
             hechos_citas_df['Etiqueta_Cita_Paciente'] = 'Indeterminada'
-            # ... (código completo de etiquetado con np.select que ya te había dado y funcionaba conceptualmente) ...
+            cond_primera = hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].isnull() | (
+                hechos_citas_df['Fecha Cita'] == hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'])
+            hechos_citas_df.loc[cond_primera & (
+                hechos_citas_df['Fecha Cita'] >= today), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo en Agenda"
+            hechos_citas_df.loc[cond_primera & (hechos_citas_df['Fecha Cita'] < today) & (
+                hechos_citas_df['Cita_asistida'] == 1), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo Atendido"
+            hechos_citas_df.loc[cond_primera & (hechos_citas_df['Fecha Cita'] < today) & (
+                hechos_citas_df['Cita_asistida'] == 0), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo No Atendido"
+            cond_recurrente = ~cond_primera
+            cond_mismo_mes = hechos_citas_df['Fecha Cita'].dt.to_period(
+                'M') == hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].dt.to_period('M')
+            hechos_citas_df.loc[cond_recurrente & cond_mismo_mes & (
+                hechos_citas_df['Cita_asistida'] == 1), 'Etiqueta_Cita_Paciente'] = "Paciente Atendido Mismo Mes que Debutó"
+            hechos_citas_df.loc[cond_recurrente & ~cond_mismo_mes & (
+                hechos_citas_df['Fecha Cita'] >= today), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente en Agenda"
+            hechos_citas_df.loc[cond_recurrente & ~cond_mismo_mes & (hechos_citas_df['Fecha Cita'] < today) & (
+                hechos_citas_df['Cita_asistida'] == 1), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente Atendido"
+            hechos_citas_df.loc[cond_recurrente & ~cond_mismo_mes & (hechos_citas_df['Fecha Cita'] < today) & (
+                hechos_citas_df['Cita_asistida'] == 0), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente No Atendido"
 
             resultados_dfs['hechos_citas'] = hechos_citas_df.copy()
 
@@ -213,8 +220,12 @@ def generar_insights_pacientes(
         df_presupuestos = get_df_by_type(
             processed_dfs, "Presupuesto por Accion_df", all_advertencias)
         if df_presupuestos is not None:
-            df_presupuestos['Descuento_Presupuestado_Detalle'] = pd.to_numeric(
-                df_presupuestos['Procedimiento_precio_original'], errors='coerce') - pd.to_numeric(df_presupuestos['Procedimiento_precio_paciente'], errors='coerce')
+            col_precio_orig = 'Procedimiento_precio_original'
+            col_precio_pac = 'Procedimiento_precio_paciente'
+            # Verificar existencia ANTES de usar
+            if col_precio_orig in df_presupuestos.columns and col_precio_pac in df_presupuestos.columns:
+                df_presupuestos['Descuento_Presupuestado_Detalle'] = pd.to_numeric(
+                    df_presupuestos[col_precio_orig], errors='coerce') - pd.to_numeric(df_presupuestos[col_precio_pac], errors='coerce')
             resultados_dfs['hechos_presupuesto_detalle'] = df_presupuestos.copy()
 
         df_acciones = get_df_by_type(
@@ -225,28 +236,38 @@ def generar_insights_pacientes(
         df_movimiento = get_df_by_type(
             processed_dfs, "Movimiento_df", all_advertencias)
         if df_movimiento is not None and 'ID_Pago' in df_movimiento.columns:
-            df_movimiento['Total Pago'] = pd.to_numeric(
-                df_movimiento['Total Pago'], errors='coerce').fillna(0)
-            df_movimiento['Abono Libre'] = pd.to_numeric(
-                df_movimiento['Abono Libre'], errors='coerce').fillna(0)
+            # CORRECCIÓN PARA VSCODE: Verificar columnas antes de la conversión numérica
+            col_total_pago = 'Total Pago'
+            col_abono_libre = 'Abono Libre'
+
+            if col_total_pago in df_movimiento.columns:
+                df_movimiento[col_total_pago] = pd.to_numeric(
+                    df_movimiento[col_total_pago], errors='coerce').fillna(0)
+            if col_abono_libre in df_movimiento.columns:
+                df_movimiento[col_abono_libre] = pd.to_numeric(
+                    df_movimiento[col_abono_libre], errors='coerce').fillna(0)
+
+            # El resto de la lógica de pagos se mantiene igual...
             agg_cols = {col: 'first' for col in [
                 'ID_Paciente', 'Pago_fecha_recepcion', 'Total Pago', 'Abono Libre'] if col in df_movimiento.columns}
             if agg_cols:
                 tx_pagos = df_movimiento.groupby('ID_Pago', as_index=False).agg(agg_cols).rename(columns={
                     'Abono Libre': 'Monto_Abono_Libre_Original_En_Tx', 'Total Pago': 'Total_Pago_Transaccion'})
                 resultados_dfs['hechos_pagos_transacciones'] = tx_pagos
-            app_cols = {k: v for k, v in {'ID_Pago': 'ID_Pago', 'ID_Detalle Presupuesto': 'ID_Detalle_Presupuesto',
-                                          'Pagado_ID_Detalle_Presupuesto': 'Monto_Aplicado_Al_Detalle'}.items() if k in df_movimiento.columns}
-            if app_cols:
-                app_df = df_movimiento[list(app_cols.keys())].copy().rename(
-                    columns=app_cols)
+
+            app_cols_map = {'ID_Pago': 'ID_Pago', 'ID_Detalle Presupuesto': 'ID_Detalle_Presupuesto',
+                            'Pagado_ID_Detalle_Presupuesto': 'Monto_Aplicado_Al_Detalle'}
+            app_cols_exist = [
+                k for k in app_cols_map.keys() if k in df_movimiento.columns]
+            if app_cols_exist:
+                app_df = df_movimiento[app_cols_exist].copy().rename(
+                    columns=app_cols_map)
                 resultados_dfs['hechos_pagos_aplicaciones_detalle'] = app_df
 
         df_gastos = get_df_by_type(
             processed_dfs, "Tabla Gastos Aliadas Mexico_df", all_advertencias)
         if df_gastos is not None:
             resultados_dfs['hechos_gastos'] = df_gastos.copy()
-
         # 5. Generar Perfiles
         if 'hechos_pacientes' in resultados_dfs:
             df_pac_para_perfil = resultados_dfs['hechos_pacientes']

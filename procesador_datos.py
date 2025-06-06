@@ -156,25 +156,59 @@ def generar_insights_pacientes(
             # --- Cálculo de Edad (VERSIÓN SIMPLIFICADA A "DATE") ---
             col_fecha_nac = 'Fecha de nacimiento'
             if col_fecha_nac in df_pacientes_enriquecido.columns:
-                # Convertir a datetime, ignorando la hora (normalizando a medianoche). Errores se vuelven NaT.
-                fechas_nacimiento = pd.to_datetime(
-                    df_pacientes_enriquecido[col_fecha_nac], errors='coerce').dt.normalize()
+                print(
+                    f"--- Log Sherlock (BG Task): Iniciando cálculo de Edad con columna '{col_fecha_nac}'.")
 
-                # Obtener la fecha de hoy, también normalizada a medianoche.
-                today = pd.to_datetime('today').normalize()
+                # 1. Definir una función que calcule la edad para UN SOLO VALOR, de forma muy segura
+                def calcular_edad_para_fila(fecha_nac_valor):
+                    # Si el valor de entrada es nulo o no es un tipo de fecha reconocible, devuelve el nulo de Pandas
+                    if pd.isnull(fecha_nac_valor):
+                        return pd.NA
 
-                # Calcular la diferencia en días.
-                time_difference_days = (today - fechas_nacimiento).dt.days
+                    try:
+                        # Forzar conversión a Timestamp por si acaso
+                        fecha_nac_ts = pd.Timestamp(fecha_nac_valor)
 
-                # Convertir días a años y luego a entero nullable.
-                df_pacientes_enriquecido['Edad'] = (
-                    time_difference_days / 365.25).astype('Int64')
+                        # Normalizar a medianoche para ignorar la hora
+                        fecha_nac_ts = fecha_nac_ts.normalize()
+
+                        # Calcular diferencia en días
+                        time_difference_days = (pd.to_datetime(
+                            'today').normalize() - fecha_nac_ts).days
+
+                        # Calcular edad y devolver como entero
+                        edad = int(time_difference_days / 365.25)
+
+                        # Filtro de sanidad: si la edad es negativa o irrealmente grande, es un error de datos.
+                        if 0 <= edad <= 120:
+                            return edad
+                        else:
+                            return pd.NA
+                    except (ValueError, TypeError):
+                        # Si CUALQUIER COSA falla en la conversión o cálculo, devuelve Nulo
+                        return pd.NA
+
+                # 2. Convertir la columna a datetime. Los errores se vuelven NaT (Not a Time).
+                fechas_nacimiento_series = pd.to_datetime(
+                    df_pacientes_enriquecido[col_fecha_nac], errors='coerce')
+
+                # 3. Aplicar nuestra función segura a cada elemento de la serie.
+                df_pacientes_enriquecido['Edad'] = fechas_nacimiento_series.apply(
+                    calcular_edad_para_fila)
+
+                # 4. Asegurar que el tipo de la columna final sea Int64 para soportar los nulos (pd.NA).
+                df_pacientes_enriquecido['Edad'] = df_pacientes_enriquecido['Edad'].astype(
+                    'Int64')
+
                 print(
                     f"--- Log Sherlock (BG Task): Columna 'Edad' calculada. {df_pacientes_enriquecido['Edad'].notna().sum()} edades válidas.")
             else:
                 all_advertencias.append(
                     f"Advertencia: Columna '{col_fecha_nac}' no encontrada en Pacientes.")
+                # Crear la columna como nula
                 df_pacientes_enriquecido['Edad'] = pd.NA
+                df_pacientes_enriquecido['Edad'] = df_pacientes_enriquecido['Edad'].astype(
+                    'Int64')  # Asegurar el tipo
 
             # --- Enriquecimiento con Origen ---
             if 'dimension_tipos_pacientes' in resultados_dfs and 'Tipo Dentalink' in df_pacientes_enriquecido.columns:

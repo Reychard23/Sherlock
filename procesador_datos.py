@@ -154,6 +154,7 @@ def generar_insights_pacientes(
             df_pacientes_enriquecido = df_pacientes_base.copy()
 
             # --- Cálculo de Edad (VERSIÓN SIMPLIFICADA A "DATE") ---
+           # --- Cálculo de Edad (VERSIÓN FINAL CON APPLY, A PRUEBA DE TODO) ---
             col_fecha_nac = 'Fecha de nacimiento'
             if col_fecha_nac in df_pacientes_enriquecido.columns:
                 print(
@@ -205,22 +206,9 @@ def generar_insights_pacientes(
             else:
                 all_advertencias.append(
                     f"Advertencia: Columna '{col_fecha_nac}' no encontrada en Pacientes.")
-                # Crear la columna como nula
                 df_pacientes_enriquecido['Edad'] = pd.NA
                 df_pacientes_enriquecido['Edad'] = df_pacientes_enriquecido['Edad'].astype(
-                    'Int64')  # Asegurar el tipo
-
-            # --- Enriquecimiento con Origen ---
-            if 'dimension_tipos_pacientes' in resultados_dfs and 'Tipo Dentalink' in df_pacientes_enriquecido.columns:
-                df_dim_tipos_pac = resultados_dfs['dimension_tipos_pacientes']
-                # Corrección para usar 'Paciente_Origen' como me indicaste
-                if 'Tipo Dentalink' in df_dim_tipos_pac.columns and 'Paciente_Origen' in df_dim_tipos_pac.columns:
-                    df_origen_merge = df_dim_tipos_pac[[
-                        'Tipo Dentalink', 'Paciente_Origen']].drop_duplicates(subset=['Tipo Dentalink'])
-                    df_pacientes_enriquecido = pd.merge(
-                        df_pacientes_enriquecido, df_origen_merge, on='Tipo Dentalink', how='left')
-
-            resultados_dfs['hechos_pacientes'] = df_pacientes_enriquecido.copy()
+                    'Int64')
 
         # --- 3. Procesar Citas ---
         df_citas_pac = get_df_by_type(

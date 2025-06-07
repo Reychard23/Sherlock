@@ -157,64 +157,108 @@ def generar_insights_pacientes(
             resultados_dfs['hechos_pacientes'] = df_pacientes_enriquecido.copy()
 
         # 3. Procesar Citas
+            hechos_citas_df = None
         df_citas_pac = get_df_by_type(
             processed_dfs, "Citas_Pacientes_df", all_advertencias)
         df_citas_mot = get_df_by_type(
             processed_dfs, "Citas_Motivo_df", all_advertencias)
+
         if df_citas_pac is not None and df_citas_mot is not None and 'ID_Paciente' in df_citas_pac.columns and 'Fecha Cita' in df_citas_pac.columns:
-            df_citas_pac['Cita_asistida'] = pd.to_numeric(
-                df_citas_pac['Cita_asistida'], errors='coerce').fillna(0).astype(int)
-            df_citas_pac['Cita duplicada'] = pd.to_numeric(
-                df_citas_pac['Cita duplicada'], errors='coerce').fillna(0).astype(int)
-            df_citas_filtrado = df_citas_pac[df_citas_pac['Cita duplicada'] == 0].copy(
-            )
+            try:
+                col_id_cita = 'ID_Cita'
+                col_asistida = 'Cita_asistida'
+                col_duplicada = 'Cita duplicada'
+                col_id_paciente = 'ID_Paciente'
+                col_fecha_cita = 'Fecha Cita'
 
-            df_citas_filtrado['ID_Cita'] = df_citas_filtrado['ID_Cita'].astype(
-                str)
-            df_citas_mot['ID_Cita'] = df_citas_mot['ID_Cita'].astype(str)
+                df_citas_pac[col_asistida] = pd.to_numeric(
+                    df_citas_pac[col_asistida], errors='coerce').fillna(0).astype(int)
+                df_citas_pac[col_duplicada] = pd.to_numeric(
+                    df_citas_pac[col_duplicada], errors='coerce').fillna(0).astype(int)
+                df_citas_filtrado = df_citas_pac[df_citas_pac[col_duplicada] == 0].copy(
+                )
 
-            cols_from_motivo = ['ID_Cita', 'Fecha de creación cita', 'Hora Inicio Cita',
-                                'Hora Fin Cita', 'Motivo Cita', 'Sucursal', 'ID_Tratamiento']
-            cols_exist = [
-                c for c in cols_from_motivo if c in df_citas_mot.columns]
-            hechos_citas_df = pd.merge(df_citas_filtrado, df_citas_mot[cols_exist].drop_duplicates(
-                subset=['ID_Cita']), on='ID_Cita', how='left')
-            hechos_citas_df['Fecha Cita'] = pd.to_datetime(
-                hechos_citas_df['Fecha Cita'], errors='coerce').dt.normalize()
+                df_citas_filtrado[col_id_cita] = df_citas_filtrado[col_id_cita].astype(
+                    str)
+                df_citas_mot[col_id_cita] = df_citas_mot[col_id_cita].astype(
+                    str)
 
-            df_atendidas = hechos_citas_df[(
-                hechos_citas_df['Cita_asistida'] == 1) & hechos_citas_df['Fecha Cita'].notna()]
-            if not df_atendidas.empty:
-                primera_cita = df_atendidas.groupby('ID_Paciente')['Fecha Cita'].min(
-                ).reset_index().rename(columns={'Fecha Cita': 'Fecha_Primera_Cita_Atendida_Real'})
-                hechos_citas_df = pd.merge(
-                    hechos_citas_df, primera_cita, on='ID_Paciente', how='left')
-            if 'Fecha_Primera_Cita_Atendida_Real' not in hechos_citas_df.columns:
-                hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'] = pd.NaT
+                cols_from_motivo = ['ID_Cita', 'Fecha de creación cita', 'Hora Inicio Cita',
+                                    'Hora Fin Cita', 'Motivo Cita', 'Sucursal', 'ID_Tratamiento']
+                cols_exist = [
+                    c for c in cols_from_motivo if c in df_citas_mot.columns]
+                hechos_citas_df = pd.merge(df_citas_filtrado, df_citas_mot[cols_exist].drop_duplicates(
+                    subset=[col_id_cita]), on=col_id_cita, how='left')
 
-            today = pd.to_datetime('today').normalize()
-            hechos_citas_df['Etiqueta_Cita_Paciente'] = 'Indeterminada'
-            cond_primera = hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].isnull() | (
-                hechos_citas_df['Fecha Cita'] == hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'])
-            hechos_citas_df.loc[cond_primera & (
-                hechos_citas_df['Fecha Cita'] >= today), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo en Agenda"
-            hechos_citas_df.loc[cond_primera & (hechos_citas_df['Fecha Cita'] < today) & (
-                hechos_citas_df['Cita_asistida'] == 1), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo Atendido"
-            hechos_citas_df.loc[cond_primera & (hechos_citas_df['Fecha Cita'] < today) & (
-                hechos_citas_df['Cita_asistida'] == 0), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo No Atendido"
-            cond_recurrente = ~cond_primera
-            cond_mismo_mes = hechos_citas_df['Fecha Cita'].dt.to_period(
-                'M') == hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].dt.to_period('M')
-            hechos_citas_df.loc[cond_recurrente & cond_mismo_mes & (
-                hechos_citas_df['Cita_asistida'] == 1), 'Etiqueta_Cita_Paciente'] = "Paciente Atendido Mismo Mes que Debutó"
-            hechos_citas_df.loc[cond_recurrente & ~cond_mismo_mes & (
-                hechos_citas_df['Fecha Cita'] >= today), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente en Agenda"
-            hechos_citas_df.loc[cond_recurrente & ~cond_mismo_mes & (hechos_citas_df['Fecha Cita'] < today) & (
-                hechos_citas_df['Cita_asistida'] == 1), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente Atendido"
-            hechos_citas_df.loc[cond_recurrente & ~cond_mismo_mes & (hechos_citas_df['Fecha Cita'] < today) & (
-                hechos_citas_df['Cita_asistida'] == 0), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente No Atendido"
+                hechos_citas_df[col_fecha_cita] = pd.to_datetime(
+                    hechos_citas_df[col_fecha_cita], errors='coerce').dt.normalize()
 
-            resultados_dfs['hechos_citas'] = hechos_citas_df.copy()
+                df_atendidas = hechos_citas_df[(
+                    hechos_citas_df[col_asistida] == 1) & hechos_citas_df[col_fecha_cita].notna()]
+                if not df_atendidas.empty:
+                    primera_cita = df_atendidas.groupby(col_id_paciente)[col_fecha_cita].min(
+                    ).reset_index().rename(columns={col_fecha_cita: 'Fecha_Primera_Cita_Atendida_Real'})
+                    hechos_citas_df = pd.merge(
+                        hechos_citas_df, primera_cita, on=col_id_paciente, how='left')
+                if 'Fecha_Primera_Cita_Atendida_Real' not in hechos_citas_df.columns:
+                    hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'] = pd.NaT
+
+                # --- Lógica de Etiquetado
+                today = pd.to_datetime('today').normalize()
+                hechos_citas_df['Etiqueta_Cita_Paciente'] = 'Indeterminada'
+
+                # Condiciones base
+                cond_fecha_cita_valida = hechos_citas_df[col_fecha_cita].notna(
+                )
+                cond_primera_atendida_existe = hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].notna(
+                )
+                cond_asistio = hechos_citas_df[col_asistida] == 1
+
+                # Lógica para PACIENTES NUEVOS (su primera cita atendida es esta o aún no ha ocurrido)
+                cond_es_nuevo = ~cond_primera_atendida_existe | (
+                    hechos_citas_df[col_fecha_cita] <= hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'])
+
+                hechos_citas_df.loc[cond_es_nuevo & (
+                    hechos_citas_df[col_fecha_cita] >= today), 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo en Agenda"
+                hechos_citas_df.loc[cond_es_nuevo & (
+                    hechos_citas_df[col_fecha_cita] < today) & cond_asistio, 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo Atendido"
+                hechos_citas_df.loc[cond_es_nuevo & (
+                    hechos_citas_df[col_fecha_cita] < today) & ~cond_asistio, 'Etiqueta_Cita_Paciente'] = "Paciente Nuevo No Atendido"
+
+                # Lógica para PACIENTES RECURRENTES (ya tienen una primera cita atendida en el pasado)
+                cond_es_recurrente = cond_primera_atendida_existe & (
+                    hechos_citas_df[col_fecha_cita] > hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'])
+                cond_mismo_mes_debut = cond_es_recurrente & (hechos_citas_df[col_fecha_cita].dt.to_period(
+                    'M') == hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].dt.to_period('M'))
+                cond_mes_posterior_debut = cond_es_recurrente & (hechos_citas_df[col_fecha_cita].dt.to_period(
+                    'M') > hechos_citas_df['Fecha_Primera_Cita_Atendida_Real'].dt.to_period('M'))
+                hechos_citas_df.loc[cond_mismo_mes_debut & cond_asistio,
+                                    'Etiqueta_Cita_Paciente'] = "Paciente Atendido Mismo Mes que Debutó"
+                hechos_citas_df.loc[cond_mismo_mes_debut & ~cond_asistio,
+                                    'Etiqueta_Cita_Paciente'] = "Paciente No Atendido Mismo Mes que Debutó"
+                hechos_citas_df.loc[cond_mes_posterior_debut & (
+                    hechos_citas_df[col_fecha_cita] >= today), 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente en Agenda"
+                hechos_citas_df.loc[cond_mes_posterior_debut & (
+                    hechos_citas_df[col_fecha_cita] < today) & cond_asistio, 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente Atendido"
+                hechos_citas_df.loc[cond_mes_posterior_debut & (
+                    hechos_citas_df[col_fecha_cita] < today) & ~cond_asistio, 'Etiqueta_Cita_Paciente'] = "Paciente Recurrente No Atendido"
+
+                print(
+                    f"--- Log Sherlock (BG Task): Etiquetas de citas calculadas. Distribución:\n{hechos_citas_df['Etiqueta_Cita_Paciente'].value_counts(dropna=False)}")
+
+                resultados_dfs['hechos_citas'] = hechos_citas_df.copy()
+
+            except KeyError as e:
+                all_advertencias.append(
+                    f"ERROR DE CLAVE procesando citas: Falta la columna {e}. Revisa tu indice.xlsx.")
+            except Exception as e_citas:
+                all_advertencias.append(
+                    f"ERROR general procesando citas: {e_citas}")
+                import traceback
+                traceback.print_exc()
+        else:
+            all_advertencias.append(
+                "ADVERTENCIA: Faltan DFs base de Citas para procesar.")
 
         # 4. Procesar Presupuestos, Acciones, Pagos
         df_presupuestos = get_df_by_type(

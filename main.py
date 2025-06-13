@@ -1,3 +1,5 @@
+
+import json
 from fastapi import FastAPI, Request, File, UploadFile, HTTPException, Form, BackgroundTasks, Body
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Tuple, Literal
@@ -54,7 +56,7 @@ def save_df_to_supabase(
     except Exception as e:
         print(
             f"--- Log Sherlock (BG Task - save_df): ERROR al guardar tabla '{table_name}': {e}")
-        raise  # Relanzar para que la tarea de fondo lo capture en su try-except general
+        raise
 
 # --- Endpoint 1: Recibir Archivos Individualmente ---
 
@@ -108,13 +110,18 @@ async def do_the_heavy_processing_and_saving():
     _indice_file_name = None
     print("--- Log Sherlock (BG Task): Variables globales de archivos limpiadas para próximo lote.")
 
-    if engine is None or not current_indice_content or not current_saved_files:
-        print("--- Log Sherlock (BG Task): ERROR - Faltan datos esenciales (engine, índice o archivos) para iniciar la tarea.")
+    if engine is None or not current_saved_files:
+        print("--- Log Sherlock (BG Task): ERROR - Faltan datos esenciales (engine o archivos) para iniciar la tarea.")
         return
 
     try:
+        if not current_indice_name or not current_indice_content:
+            print("--- Log Sherlock (BG Task): ERROR CRÍTICO - No se encontró el nombre o el contenido del archivo 'indice.xlsx'. Abortando tarea.")
+            return
+
         data_files_sim = [InMemoryUploadFile(
             fn, fc) for fn, fc in current_saved_files.items()]
+
         indice_file_sim = InMemoryUploadFile(
             filename=current_indice_name, content=current_indice_content)
 
@@ -154,9 +161,8 @@ async def do_the_heavy_processing_and_saving():
     finally:
         print("--- Log Sherlock (BG Task): FIN TAREA DE FONDO ---")
 
+
 # --- Endpoint 2: Disparador de la Tarea de Fondo ---
-
-
 @app.post("/trigger_processing_and_save/")
 async def trigger_processing_and_save(background_tasks: BackgroundTasks):
     print("--- Log Sherlock: RECIBIDA LLAMADA a /trigger_processing_and_save/ ---")
@@ -188,14 +194,14 @@ async def execute_sql(sql_query: str = Body(..., embed=True)):
         with engine.connect() as connection:
             result = connection.execute(text(sql_query))
             if result.returns_rows:
+
                 df_result = pd.DataFrame(
-                    result.fetchall(), columns=result.keys())
-                # Pandas to_json maneja tipos como fechas a ISO 8601 string, lo cual es bueno.
+                    result.fetchall(), columns=list(result.keys()))
                 json_result = df_result.to_json(
                     orient='records', date_format='iso')
                 print(
                     f"--- Log Sherlock (SQL): Query ejecutada. Filas devueltas: {len(df_result)}")
-                # Devolvemos el JSON directamente, las herramientas como Postman lo mostrarán bien.
+
                 return JSONResponse(content=json.loads(json_result))
             else:
                 msg = f"Query ejecutada (sin filas devueltas). Filas afectadas (aprox): {result.rowcount}"

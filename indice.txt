@@ -1,0 +1,323 @@
+Archivo	Sheet	Columna	Nombre unificado	Acción
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Fecha_Afiliacion	Paciente_Fecha_Afiliacion	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Mes de afiliación	Mes de afiliación	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Año de afiliación	Año de afiliación	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Fecha de última cita	Fecha de última cita	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Mes de última cita	Mes de última cita	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Año de última cita	Año de última cita	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	# Paciente	ID_Paciente	Keep
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	CURP/RFC Paciente	CURP/RFC Paciente	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Número Interno	Número Interno	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Nombre Paciente	Paciente_Nombre	Keep
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Apellidos Paciente	Paciente_Apellidos	Keep
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Fecha de nac.	Fecha de nacimiento	Keep
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Teléfono	Teléfono	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Celular	Celular	Keep
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Ciudad	Ciudad	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Delegación	Delegación	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Dirección	Dirección	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	E-Mail	E-Mail	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Alertas	Alertas	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Referencia Paciente	Referencia Paciente	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Observaciones	Observaciones	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Sexo	Sexo	Keep
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Género	Género	Drop
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Tipo Paciente	Tipo Dentalink	Keep
+Pacientes_Nuevos.xlsx	Pacientes_Nuevos	Convenio	Convenio Paciente	Drop
+Acciones.xlsx	Acciones	Sucursal del tratamiento	Sucursal	Drop
+Acciones.xlsx	Acciones	Sucursal realizada	Sucursal	Keep
+Acciones.xlsx	Acciones	Id paciente	ID_Paciente	Keep
+Acciones.xlsx	Acciones	Número Interno	Número Interno	Drop
+Acciones.xlsx	Acciones	CURP/RFC Paciente	CURP/RFC Paciente	Drop
+Acciones.xlsx	Acciones	Nombre paciente	Nombre paciente	Drop
+Acciones.xlsx	Acciones	Apellidos paciente	Apellidos paciente	Drop
+Acciones.xlsx	Acciones	Fecha de nac.	Fecha de nac.	Drop
+Acciones.xlsx	Acciones	Sexo	Sexo	Drop
+Acciones.xlsx	Acciones	E-Mail	E-Mail	Drop
+Acciones.xlsx	Acciones	Convenio Paciente	Convenio Paciente	Drop
+Acciones.xlsx	Acciones	Id. Categoria	ID_ Categoria	Drop
+Acciones.xlsx	Acciones	Nombre Categoria	Nombre Categoria	Drop
+Acciones.xlsx	Acciones	# Tratamiento	ID_Tratamiento	Keep
+Acciones.xlsx	Acciones	Dueño Tratamiento	Dueño Tratamiento	Drop
+Acciones.xlsx	Acciones	CURP/RFC Dentista Tratamiento	CURP/RFC Dentista Tratamiento	Drop
+Acciones.xlsx	Acciones	Nombre Dentista Tratamiento	Nombre Dentista Tratamiento	Drop
+Acciones.xlsx	Acciones	Apellidos Dentista Tratamiento	Apellidos Dentista Tratamiento	Drop
+Acciones.xlsx	Acciones	CURP/RFC Dentista Realizador	CURP/RFC Dentista Realizador	Drop
+Acciones.xlsx	Acciones	Nombre Dentista Realizador	Nombre Dentista Realizador	Drop
+Acciones.xlsx	Acciones	Apellidos Dentista Realizador	Apellidos Dentista Realizador	Drop
+Acciones.xlsx	Acciones	Estado de la consulta	Estado de la consulta	Drop
+Acciones.xlsx	Acciones	Nombre Convenio	Nombre Convenio	Drop
+Acciones.xlsx	Acciones	Empresa Convenio Tratamiento	Empresa Convenio Tratamiento	Drop
+Acciones.xlsx	Acciones	Empresa Convenio Paciente	Empresa Convenio Paciente	Drop
+Acciones.xlsx	Acciones	Id. Detalle Presupuesto	ID_Detalle Presupuesto	Keep
+Acciones.xlsx	Acciones	Id Prestacion	Id Prestacion	Drop
+Acciones.xlsx	Acciones	Código Procedimiento	Código procedimiento	Drop
+Acciones.xlsx	Acciones	Nombre Prestacion	ID_Procedimiento	Keep
+Acciones.xlsx	Acciones	Pieza Tratada	Procedimiento_Pieza_Tratada	Keep
+Acciones.xlsx	Acciones	Fecha Realizacion	Procedimiento_Fecha_Realizacion	Keep
+Acciones.xlsx	Acciones	Mes Realización	Mes Realización	Drop
+Acciones.xlsx	Acciones	Año Realización	Año Realización	Drop
+Acciones.xlsx	Acciones	Fecha carga prestación	Fecha carga prodecimiento	Drop
+Acciones.xlsx	Acciones	Precio Prestación	Precio prodecimiento	Drop
+Acciones.xlsx	Acciones	Precio original	Precio original	Drop
+Acciones.xlsx	Acciones	Pagado Paciente Prestación	Pagado Paciente prodecimiento	Drop
+Acciones.xlsx	Acciones	Descuentos por caja aplicados	Descuentos por caja aplicados	Drop
+Acciones.xlsx	Acciones	Costo para la clínica (laboratorios)	Costo para la clínica (laboratorios)	Drop
+Acciones.xlsx	Acciones	Total a pagar Dentista	Total a pagar Dentista	Drop
+Acciones.xlsx	Acciones	Fecha de recepción del pago	Fecha de recepción del pago	Drop
+Acciones.xlsx	Acciones	Boletas asociadas	Boletas asociadas	Drop
+Acciones.xlsx	Acciones	Costo de laboratorio	Costo de laboratorio	Drop
+Citas_Motivo.xlsx	Sheet1	# Cita	ID_Cita	Keep
+Citas_Motivo.xlsx	Sheet1	Estado Cita	Estado Cita	Keep
+Citas_Motivo.xlsx	Sheet1	Fecha Cita	Fecha Cita	Keep
+Citas_Motivo.xlsx	Sheet1	Mes Cita	Mes Cita	Drop
+Citas_Motivo.xlsx	Sheet1	Año Cita	Año Cita	Drop
+Citas_Motivo.xlsx	Sheet1	Hora Inicio Cita	Hora Inicio Cita	Keep
+Citas_Motivo.xlsx	Sheet1	Hora Fin Cita	Hora Fin Cita	Keep
+Citas_Motivo.xlsx	Sheet1	Comentario Cita	Comentario Cita	Drop
+Citas_Motivo.xlsx	Sheet1	Sillón (Recurso)	Sillón (Recurso)	Keep
+Citas_Motivo.xlsx	Sheet1	# Tratamiento	ID_Tratamiento	Keep
+Citas_Motivo.xlsx	Sheet1	Nombre Profesional Cita	Nombre Profesional Cita	Drop
+Citas_Motivo.xlsx	Sheet1	Apellidos Profesional Cita	Apellidos Profesional Cita	Drop
+Citas_Motivo.xlsx	Sheet1	Especialidad Profesional	Especialidad Profesional	Drop
+Citas_Motivo.xlsx	Sheet1	# Paciente	ID_Paciente	Keep
+Citas_Motivo.xlsx	Sheet1	Número interno	Número interno	Drop
+Citas_Motivo.xlsx	Sheet1	CURP/RFC Paciente	CURP/RFC Paciente	Drop
+Citas_Motivo.xlsx	Sheet1	Nombre Paciente	Nombre Paciente	Drop
+Citas_Motivo.xlsx	Sheet1	Apellidos Paciente	Apellidos Paciente	Drop
+Citas_Motivo.xlsx	Sheet1	Fecha de nac.	Fecha de nac.	Drop
+Citas_Motivo.xlsx	Sheet1	E-Mail	E-Mail	Drop
+Citas_Motivo.xlsx	Sheet1	Teléfono	Teléfono	Drop
+Citas_Motivo.xlsx	Sheet1	Celular	Celular	Drop
+Citas_Motivo.xlsx	Sheet1	Referencia Paciente	Referencia Paciente	Drop
+Citas_Motivo.xlsx	Sheet1	CURP/RFC Apoderado	CURP/RFC Apoderado	Drop
+Citas_Motivo.xlsx	Sheet1	Nombre Apoderado	Nombre Apoderado	Drop
+Citas_Motivo.xlsx	Sheet1	Teléfono Apoderado	Teléfono Apoderado	Drop
+Citas_Motivo.xlsx	Sheet1	Celular Apoderado	Celular Apoderado	Drop
+Citas_Motivo.xlsx	Sheet1	Convenio Paciente	Convenio Paciente	Drop
+Citas_Motivo.xlsx	Sheet1	Convenio Tratamiento	Convenio Tratamiento	Drop
+Citas_Motivo.xlsx	Sheet1	Tipo Paciente	Tipo Paciente	Drop
+Citas_Motivo.xlsx	Sheet1	Fecha de generación del tratamiento	Fecha de generación del tratamiento	Drop
+Citas_Motivo.xlsx	Sheet1	Mes de generación del tratamiento	Mes de generación del tratamiento	Drop
+Citas_Motivo.xlsx	Sheet1	Año de generación del tratamiento	Año de generación del tratamiento	Drop
+Citas_Motivo.xlsx	Sheet1	Nombre Sucursal	Sucursal	Keep
+Citas_Motivo.xlsx	Sheet1	Agendado por	Agendado por	Drop
+Citas_Motivo.xlsx	Sheet1	Fecha de creación de cita	Fecha de creación de cita	Keep
+Citas_Motivo.xlsx	Sheet1	Observaciones	Observaciones	Drop
+Citas_Motivo.xlsx	Sheet1	Motivo de Atención	Motivo de Atención	Drop
+Citas_Motivo.xlsx	Sheet1	Motivo Cita	Motivo Cita	Keep
+Citas_Pacientes.xlsx	Citas	Sucursal	Sucursal	Drop
+Citas_Pacientes.xlsx	Citas	Id paciente	ID_Paciente	Keep
+Citas_Pacientes.xlsx	Citas	Número Interno	Número Interno	Drop
+Citas_Pacientes.xlsx	Citas	Nombre Paciente	Nombre Paciente	Drop
+Citas_Pacientes.xlsx	Citas	Apellidos Paciente	Apellidos Paciente	Drop
+Citas_Pacientes.xlsx	Citas	CURP/RFC Paciente	CURP/RFC Paciente	Drop
+Citas_Pacientes.xlsx	Citas	Antigüedad paciente	Antigüedad paciente	Drop
+Citas_Pacientes.xlsx	Citas	# Tratamiento	ID_Tratamiento	Drop
+Citas_Pacientes.xlsx	Citas	Especialidad	Especialidad	Drop
+Citas_Pacientes.xlsx	Citas	Tratamiento o Diagnostico	Tratamiento o Diagnóstico	Drop
+Citas_Pacientes.xlsx	Citas	Nombre Profesional Tratante	Nombre Profesional Tratante	Drop
+Citas_Pacientes.xlsx	Citas	Apellidos Profesional Tratante	Apellidos Profesional Tratante	Drop
+Citas_Pacientes.xlsx	Citas	# Cita	ID_Cita	Keep
+Citas_Pacientes.xlsx	Citas	Fecha Cita	Fecha Cita	Keep
+Citas_Pacientes.xlsx	Citas	Mes Cita	Mes Cita	Drop
+Citas_Pacientes.xlsx	Citas	AÃ±o Cita	Año Cita	Drop
+Citas_Pacientes.xlsx	Citas	Estado actual cita	Estado actual cita	Drop
+Citas_Pacientes.xlsx	Citas	Cancelado	Cancelado	Drop
+Citas_Pacientes.xlsx	Citas	Atendido	Atendido	Drop
+Citas_Pacientes.xlsx	Citas	Confirmado por telÃ©fono	Confirmado por teléfono	Drop
+Citas_Pacientes.xlsx	Citas	En sala de espera	En sala de espera	Drop
+Citas_Pacientes.xlsx	Citas	AtendiÃ©ndose	Atendiéndose	Drop
+Citas_Pacientes.xlsx	Citas	No confirmado	No confirmado	Drop
+Citas_Pacientes.xlsx	Citas	No asiste	No asiste	Drop
+Citas_Pacientes.xlsx	Citas	Cancelado por sesiones en conflicto	Cancelado por sesiones en conflicto	Drop
+Citas_Pacientes.xlsx	Citas	Cancelado por pcte. via email	Cancelado por pcte. via email	Drop
+Citas_Pacientes.xlsx	Citas	Confirmado por email	Confirmado por email	Drop
+Citas_Pacientes.xlsx	Citas	Notificado via email	Notificado via email	Drop
+Citas_Pacientes.xlsx	Citas	Agenda Online	Agenda Online	Drop
+Citas_Pacientes.xlsx	Citas	Cambio de fecha	Cambio de fecha	Drop
+Citas_Pacientes.xlsx	Citas	Confirmado por whatsapp	Contactado por chat de WhatsApp	Drop
+Citas_Pacientes.xlsx	Citas	Anulado por reprogramación	Anulado por reprogramación	Drop
+Citas_Pacientes.xlsx	Citas	Paciente Deshabilitado	Paciente Deshabilitado	Drop
+Citas_Pacientes.xlsx	Citas	Confirmado por Whatsapp	Confirmado por Whatsapp	Drop
+Citas_Pacientes.xlsx	Citas	No se establece contacto por ningún medio	No se establece contacto por ningún medio	Drop
+Citas_Pacientes.xlsx	Citas	No se pudo atender	No se pudo atender	Drop
+Citas_Pacientes.xlsx	Citas	Confirmado personalmente	Confirmado personalmente	Drop
+Citas_Pacientes.xlsx	Citas	Confirmado por Whatsapp	Confirmado por Whatsapp	Drop
+Citas_Pacientes.xlsx	Citas	Anulado por pcte. via Whatsapp	Anulado por pcte. via Whatsapp	Drop
+Citas_Pacientes.xlsx	Citas	Consecutivo cita	Consecutivo_cita	Keep
+Citas_Pacientes.xlsx	Citas	Total de citas Asistidas	Total_Citas asistidas	Drop
+Citas_Pacientes.xlsx	Citas	"asitidos s,a"	Cita_asistida	Keep
+Citas_Pacientes.xlsx	Citas	Citas Duplicadas	Cita duplicada	Keep
+Presupuesto por Accion.xlsx	Presupuestos	Sucursal	Sucursal	Keep
+Presupuesto por Accion.xlsx	Presupuestos	# Tratamiento	ID_Tratamiento	Keep
+Presupuesto por Accion.xlsx	Presupuestos	Convenio Tratamiento	Convenio Tratamiento	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Fecha de generación	Tratamiento_fecha_de_generacion	Keep
+Presupuesto por Accion.xlsx	Presupuestos	Mes de generación	Mes de generación	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Año de generación	Año de generación	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Fecha de captura	Tratamiento_fecha_de_captura	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Mes de captura	Mes de captura	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Año de captura	Año de captura	Drop
+Presupuesto por Accion.xlsx	Presupuestos	# Detalle Presupuesto	ID_Detalle Presupuesto	Keep
+Presupuesto por Accion.xlsx	Presupuestos	Código Prestación	Código prodecimiento	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Nombre Procedimiento	ID_Procedimiento	Keep
+Presupuesto por Accion.xlsx	Presupuestos	Nombre Categoría	Nombre Categoría	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Listado	Listado	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Tipo Procedimiento	Tipo procedimiento	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Fecha Realización	Fecha Realización	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Precio Original	Procedimiento_precio_original	Keep
+Presupuesto por Accion.xlsx	Presupuestos	Precio Paciente	Procedimiento_precio_paciente	Keep
+Presupuesto por Accion.xlsx	Presupuestos	Pagado Procedimiento	Pagado procedimiento	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Especialidad Dentista Tratamiento	Especialidad Dentista Tratamiento	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Nombre Dentista Tratamiento	Nombre Dentista Tratamiento	Drop
+Presupuesto por Accion.xlsx	Presupuestos	# Paciente	ID_Paciente	Keep
+Presupuesto por Accion.xlsx	Presupuestos	CURP/RFC Paciente	CURP/RFC Paciente	Drop
+Presupuesto por Accion.xlsx	Presupuestos	# Ficha	ID_Ficha	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Nombre Paciente	Nombre Paciente	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Apellidos Paciente	Apellidos Paciente	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Fecha de nac.	Fecha de nac.	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Teléfono	Teléfono	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Celular	Celular	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Ciudad	Ciudad	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Delegación	Delegación	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Dirección	Dirección	Drop
+Presupuesto por Accion.xlsx	Presupuestos	E-Mail	E-Mail	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Referencia Paciente	Referencia Paciente	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Fecha Afiliación	Fecha Afiliación	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Fecha última acción realizada	Fecha última acción realizada	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Total Presupuesto	Total Presupuesto	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Tratamiento Iniciado	Tratamiento_Iniciado	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Tratamiento Capturado	Tratamiento Capturado	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Total Pagos Tratamiento	Total Pagos Tratamiento	Drop
+Presupuesto por Accion.xlsx	Presupuestos	Estado Tratamiento	Tratamiento_Estado	Drop
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Id paciente	ID_Paciente	Keep
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Número Interno	Número Interno	Drop
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Nombre Paciente	Nombre Paciente	Drop
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Apellidos Paciente	Apellidos Paciente	Drop
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	# Pregunta	ID_Pregunta	Drop
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Pregunta	ID_Pregunta	Keep
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Escala	Escala	Drop
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Sección	Sección	Keep
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Encuesta	Encuesta	Drop
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Resultado	Resultado	Keep
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Fecha de envío	Fecha de envío	Keep
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Fecha	Fecha de respuesta	Keep
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Sucursal	Sucursal	Keep
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Nombre Profesional	Nombre Profesional	Drop
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	Apellidos Profesional	Apellidos Profesional	Drop
+Respuesta_Encuestas.xlsx	Respuestas_encuestas_satisfacci	# Tratamiento	ID_Tratamiento	Keep
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Nombre Sucursal	Sucursal	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	# Tratamiento	ID_Tratamiento	Keep
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Convenio Tratamiento	Convenio Tratamiento	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Nombre Empresa Convenio	Empresa Convenio Paciente	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Fecha de generación del tratamiento	Tratamiento_Fecha_Generacion	Keep
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Mes de generación del tratamiento	Mes de generación del tratamiento	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Año de generación del tratamiento	Año de generación del tratamiento	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Fecha de captura del tratamiento	Fecha de captura del tratamiento	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Mes de captura del tratamiento	Mes de captura del tratamiento	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Año de captura del tratamiento	Año de captura del tratamiento	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Especialidad Dentista Tratamiento	Especialidad Dentista Tratamiento	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Nombre Dentista Tratamiento	Nombre Dentista Tratamiento	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Apellidos Dentista Tratamiento	Apellidos Dentista Tratamiento	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	# Paciente	ID_Paciente	Keep
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	CURP/RFC Paciente	CURP/RFC Paciente	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Número Interno	Número Interno	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Nombre Paciente	Nombre Paciente	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Apellidos Paciente	Apellidos Paciente	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Fecha de nac.	Fecha de nac.	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Teléfono	Teléfono	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Celular	Celular	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Ciudad	Ciudad	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Delegación	Delegación	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Dirección	Dirección	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	E-Mail	E-Mail	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Tipo Paciente	Tipo Paciente	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Referencia Paciente	Referencia Paciente	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Fecha Afiliación	Fecha Afiliación	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Fecha última acción realizada	Fecha última acción realizada	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Total Presupuesto	Presupuesto_total	Keep
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Tratamiento Iniciado	Tratamiento_iniciado	Keep
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Tratamiento Capturado	Tratamiento_Aceptado	Keep
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Total Pagos	Tratamiento_Total_Pagado	Keep
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Estado Tratamiento	Tratamiento_Estado Actual	Keep
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Fecha de envío de PDT por correo	Fecha de envío de PDT por correo	Drop
+Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Nombre tratamiento	Tratamiento_Nombre	Keep
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Marca	Marca	Drop
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Sucursal	Sucursal	Keep
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Categoría Gasto	Categoria_Gasto	Keep
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Detalle Gasto	Detalle_Gasto	Drop
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Fecha del Gasto	Fecha del Gasto	Keep
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Monto Gasto	Monto Gasto	Keep
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Medio de pago	Gasto_medio_de_pago	Keep
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Categoría	Categoría Gasto	Keep
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	sub categoría	Subcategoria gasto	Keep
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Detalle BI	Detalle Gasto	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nombre Sucursal	Sucursal	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	# Tratamiento	ID_Tratamiento	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nombre Profesional Tratamiento	Nombre Profesional Tratamiento	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Apellidos Profesional Tratamiento	Apellidos Profesional Tratamiento	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Especialidad Profesional Tratamiento	Especialidad Profesional Tratamiento	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nombre Profesional Realizador	Nombre Profesional Realizador	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Especialidad Profesional Realizador	Especialidad Profesional Realizador	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Receptor del pago	Pago_receptor	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	# Pago	ID_Pago	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Fecha de recepción del pago	Pago_fecha_recepcion	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Mes de recepción del pago	Mes de recepción del pago	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Año de recepción del pago	Año de recepción del pago	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	# Paciente	ID_Paciente	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	CURP/RFC Paciente	CURP/RFC Paciente	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nombre Paciente	Nombre Paciente	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Apellidos Paciente	Apellidos Paciente	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Fecha de nac.	Fecha de nac.	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Comuna Paciente	Comuna Paciente	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Número Interno	Número Interno	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Tipo Paciente	Tipo Paciente	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Referencia Paciente	Referencia Paciente	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	CURP/RFC Apoderado	CURP/RFC Apoderado	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nombre Apoderado	Nombre Apoderado	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Convenio	Convenio Paciente	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Descuento	Procedimiento_Descuento%	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	# Factura	ID_Factura	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Acción	Pago_tipo	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	# Detalle Presupuesto	ID_Detalle Presupuesto	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	# Categoría	ID_Categoría	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nombre categoría	Nombre categoría	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	# Procedimiento	# Procedimiento	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Código Prestación	Código prodecimiento	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nombre Prestación	ID_Procedimiento	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Pieza Tratada	Procedimiento_Pieza_Tratada	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Realizado	Realizado	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Monto Procedimiento	Monto procedimiento	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Pagado Procedimiento	Pagado_ID_Detalle_Presupuesto	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Abono Libre	Abono Libre	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Total Pago	Total Pago	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Medio de pago	Medio_de_pago	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nombre Banco	Nombre Banco	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	CURP / RFC	CURP / RFC	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nr Referencia	Pago_Nr Referencia	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Código de autorización	Código de autorización	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Últimos 4 dígitos	Últimos 4 dígitos	Keep
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Número de cuotas	Número de cuotas	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Estado Pago	Estado Pago	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Nombre descuento	Nombre descuento	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Fecha de vencimiento	Pago_fecha_recepcion	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Mes de vencimiento	Mes de vencimiento	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Año de vencimiento	Año de vencimiento	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Generado	Generado	Drop
+Movimiento.xlsx	Finanzas_PagosPacientesDetalleP	Costo de laboratorio	Costo de laboratorio	Drop
+Sucursal.xlsx	Sucursal	Sucursal	Sucursal	Keep
+Tabla_Procedimientos.xlsx	Hoja1	Nombre accion	ID_Procedimiento	Keep
+Tabla_Procedimientos.xlsx	Hoja1	Categoría BI	Categoria_procedimiento	Keep
+Tabla_Procedimientos.xlsx	Hoja1	Subcategoría	Subcategoria_procedimiento	Keep
+Tabla_Procedimientos.xlsx	Hoja1	Procedimiento	Nombre_procedimiento	Keep
+Tabla_Procedimientos.xlsx	Hoja1	Cantidad	Cantidad	Drop
+Tabla_Procedimientos.xlsx	Hoja1	Auditadoría SF Ortodoncía	auditoria	Drop
+Tabla_Procedimientos.xlsx	Hoja1	Auditadoría Dictamen 	auditoria	Drop
+Tipos de pacientes.xlsx	Hoja1	Tipo Dentalink	Tipo Dentalink	Keep
+Tipos de pacientes.xlsx	Hoja1	Paciente_Origen	Paciente_Origen	Keep
+Lada.xlsx	Hoja1	Cel	Celular	Keep
+Lada.xlsx	Hoja1	Largo	Largo	Drop
+Lada.xlsx	Hoja1	Clave	Clave	Drop
+Lada.xlsx	Hoja1	Ciudad	Ciudad	Keep
+Medios_de_pago.xlsx	Hoja1	Medio de pago	Medio_de_pago_Key	Keep
+Medios_de_pago.xlsx	Hoja1	Medio de pago PBI	Medio_de_pago	Keep

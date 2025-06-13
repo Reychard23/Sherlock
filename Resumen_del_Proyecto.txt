@@ -1,0 +1,102 @@
+Proyecto "Sherlock": documentación técnica y Modelo de Datos.
+1. Resumen del proyecto
+
+1.1. Objetivo Final del Proyecto
+Construir un asistente de IA avanzado llamado "Sherlock" para el Director General de Dental Network. El asistente debe poder responder preguntas complejas de negocio (KPIs, análisis de rentabilidad, perfiles de pacientes, etc.) en lenguaje natural, consultando una base de datos analítica poblada con los datos operativos de la empresa.
+
+1.2. Arquitectura General
+
+* Fuente de Datos: Archivos Excel (.xlsx) exportados del sistema Dentalink, almacenados en una carpeta de Dropbox.
+* Reglas de Negocio: Un archivo maestro indice.xlsx que centraliza todas las reglas para la transformación de datos: qué columnas renombrar a un "Nombre unificado" y qué columnas eliminar (usando la columna Acción con valores Keep/Drop).
+* Orquestador: Un escenario en Make.com que automatiza todo el proceso de datos.
+* Microservicio de Procesamiento: Una aplicación en Python usando el framework FastAPI, desplegada en un servicio web de Render. Esta aplicación maneja toda la transformación y carga de datos.
+* Base de Datos Analítica: Una base de datos PostgreSQL alojada en Supabase, que funciona como nuestro Data Warehouse.
+
+2. Proceso ETL (Extracción, Transformación y Carga)
+2.1. Flujo de orquestación:
+* Extracción: Un escenario en Make se ejecuta diariamente, encontrando todos los archivos de Excel actualizados en una carpeta de Dropbox.
+* Carga: Make llama al endpoint /upload_single_file/ de FastAPI en un bucle, subiendo cada archivo de datos y el indice.xlsx uno por uno.
+* Almacenamiento Temporal: FastAPI recibe cada archivo y lo guarda en la memoria del servidor.
+* Disparo del Procesamiento: Tras subir el último archivo, Make llama a un segundo endpoint: /trigger_processing_and_save/
+* Ejecución Asíncrona: Para evitar timeouts, este endpoint responde a Make inmediatamente con un 202 Accepted y lanza una Tarea de Fondo (Background Task) que realiza todo el trabajo pesado.
+
+2.2. Lógica Principal del Procesamiento (archivo procesador_datos.py)
+
+* Función load_dataframes_from_uploads (Limpieza Inicial): Esta función lee el indice.xlsx para aprender las reglas de negocio. Luego, para cada archivo de datos, aplica estas reglas para renombrar y eliminar columnas, produciendo un conjunto de DataFrames de Pandas limpios y estandarizados.
+* Función generar_insights_pacientes (Enriquecimiento y Modelado): Toma los DataFrames limpios y construye el modelo de datos relacional que se guardará en Supabase.
+
+3. Modelo de Datos (En Supabase)
+
+3.1. Tablas de Dimensiones (Catálogos): Proporcionan contexto y descripciones.
+* dimension_sucursales: Lista maestra de las sucursales de la clínica.
+* dimension_procedimientos: Catálogo de todos los procedimientos dentales, con su ID_Procedimiento, Nombre_procedimiento, Categoria_procedimiento, etc. Es una clasificación por estandarizada para cada procedimiento dental.
+* dimension_tipos_pacientes: Mapea el Tipo Dentalink (del sistema original) a un Paciente_Origen limpio y útil para marketing (ej. 'Google ads', 'Facebook ads’, ‘Instagram ads’, 'Referido').
+* dimension_lada: Catálogo para derivar la Ciudad a partir de números de teléfono.
+* dimension_tratamientos_generados: Catálogo de planes de tratamiento, con ID_Tratamiento y Tratamiento_Nombre.
+* dimension_sucursales: Lista maestra de las sucursales de la clínica.
+* dimension_procedimientos: Catálogo de todos los procedimientos dentales, con su ID_Procedimiento, Nombre_procedimiento, Categoria_procedimiento, etc. Es una clasificación por estandarizada para cada procedimiento dental.
+* dimension_tipos_pacientes: Mapea el Tipo Dentalink (del sistema original) a un Paciente_Origen limpio y útil para marketing (ej. 'Google ads', 'Facebook ads’, ‘Instagram ads’, 'Referido').
+* dimension_lada: Catálogo para derivar la Ciudad a partir de números de teléfono
+* dimension_tratamientos_generados: Catálogo de planes de tratamiento, con ID_Tratamiento y Tratamiento_Nombre.
+
+3.2. Tablas de hechos
+* hechos_pacientes: La tabla central de pacientes. Cada fila es un ID_Paciente único con sus atributos demográficos y enriquecidos, como la Edad (calculada en Python) y el Paciente_Origen.
+* hechos_citas: Un registro detallado de todas las citas (sin citas duplicadas de un mismo paciente en un mismo día en dos horarios distintos). Es una tabla enriquecida que, entre otras cosas, contiene:
+    Fecha_Primera_Cita_Atendida_Real: Una columna calculada que marca la fecha del "debut" de cada paciente (su primera cita a la que realmente asistió). Es fundamental para la lógica de "paciente nuevo".
+    Etiqueta_Cita_Paciente: Una clasificación para cada cita (ej. 'Paciente Nuevo Atendido', 'Paciente Recurrente Atendido', 'Paciente Atendido Mismo Mes que Debutó') que define su contexto de negocio.
+* hechos_presupuesto_detalle: El detalle granular de cada línea de un presupuesto. Su clave principal es ID_Detalle_Presupuesto.
+* hechos_acciones_realizadas: Registra cada procedimiento dental efectivamente realizado. Se une a los presupuestos a través de ID_Detalle_Presupuesto. Contiene la columna Procedimiento_Pieza_Tratada y su propia clave primaria única (ID_Accion_Unico).
+* hechos_pagos_transacciones: Tabla resumen de los eventos de pago. Hay una fila por cada ID_Pago único. Resuelve el problema de los "Abonos Libres" almacenando el Total_Pago_Transaccion y el Monto_Abono_Libre_Original_En_Tx una sola vez por transacción para evitar doble conteo.
+* hechos_pagos_aplicaciones_detalle: Tabla granular que muestra cómo se aplicó el dinero de cada transacción. El ID_Detalle_Presupuesto puede ser nulo, indicando que esa parte del pago fue un "Abono Libre".
+* hechos_gastos: Tabla con los gastos de la clínica por sucursal.
+
+3.3. Tabla de agregación (perfiles de pacientes)
+* perfil_edad_sexo_origen_paciente: Un conteo de pacientes únicos agrupados por Edad, Sexo y Origen de Marketing.
+4. Endpoints de la API (archivo main.py)
+La aplicación FastAPI expone varios endpoints clave:
+* /upload_single_file/: Recibe los archivos uno por uno desde Make.
+* /trigger_processing_and_save/: Inicia la tarea de fondo que ejecuta todo el ETL.
+* /execute_sql_query/: Un endpoint preparado para la siguiente fase. Recibe una query SQL como texto, la ejecuta de forma segura en Supabase y devuelve los resultados. Está pendiente de desarrollo.
+* /admin/reset_memory/: Una utilidad de depuración para limpiar la memoria del servidor entre pruebas.
+
+5. Integración del Asistente con IA “Sherlock”
+Una vez el ETL esté completo. El próximo paso es construir el cerebro conversacional de Sherlock.
+* Método: Se utilizará Prompt Engineering para enseñarle a un LLM (Gemini/GPT) cómo responder preguntas.
+* Herramientas Iniciales: Un "Playground" de IA (como Google AI Studio) y el Editor de SQL de Supabase.
+* "Super Prompt": Se creará un prompt de sistema detallado que incluirá:
+* El rol y las instrucciones del asistente ("Eres Sherlock...").
+* La descripción completa del esquema de la base de datos (tablas, columnas, descripciones y relaciones clave).
+* Ejemplos de preguntas de negocio y sus correspondientes queries SQL.
+
+* Flujo de Trabajo: El plan es iterar manualmente: hacer preguntas en el Playground, obtener el SQL, ejecutarlo en Supabase para validar, y refinar el prompt hasta que genere queries precisas de forma consistente.
+* Automatización Futura: Una vez que el prompt sea robusto, se construirá el escenario final de Make que conectará Slack con el endpoint /execute_sql_query/ para automatizar todo el ciclo de preguntas y respuestas.
+
+6. Detalles de tablas especiales:
+6.1. Tabla: hechos_pagos_transacciones
+* Descripción: Almacena un resumen de cada transacción de pago única. Cada fila representa un evento de pago completo, identificado por ID_Pago. Esta tabla debe usarse para obtener el monto total de un pago y cualquier saldo a favor ("Abono Libre") asociado a esa transacción.
+* Columnas Clave: 
+* ID_Pago (TEXTO, CLAVE PRIMARIA, NO NULO): El identificador único para toda la transacción de pago.
+* ID_Paciente (TEXTO, CLAVE FORÁNEA a hechos_pacientes.ID_Paciente, NO NULO): El paciente que realizó el pago.
+* Pago_fecha_recepcion (FECHA Y HORA, NO NULO): La fecha en que se recibió el pago.
+* Total_Pago_Transaccion (NUMÉRICO, NO NULO): El monto total bruto de esta única transacción de pago. Utiliza esta columna para sumar los pagos totales y evitar el doble conteo.
+* Monto_Abono_Libre_Original_En_Tx (NUMÉRICO, NO NULO): La porción del Total_Pago_Transaccion que no fue asignada a un procedimiento específico en el momento del pago. Representa el saldo a favor o crédito no asignado del paciente proveniente de esta transacción específica.
+* Sucursal (TEXTO, PUEDE SER NULO): La sucursal de la clínica donde se registró el pago.
+
+
+6.2. Tabla: hechos_pagos_aplicaciones_detalle
+* Descripción: Es una tabla granular que muestra cómo se desglosó el dinero de cada transacción de pago y se aplicó a procedimientos específicos del presupuesto. Tiene el mismo nivel de detalle que el archivo original Movimiento.xlsx. Un solo ID_Pago puede tener múltiples filas en esta tabla.
+* Columnas Clave: 
+* ID_Pago (TEXTO, CLAVE FORÁNEA a hechos_pagos_transacciones.ID_Pago, NO NULO): Vincula esta línea de aplicación a la transacción de pago general.
+* ID_Detalle_Presupuesto (TEXTO, CLAVE FORÁNEA a hechos_presupuesto_detalle.ID_Detalle_Presupuesto, PUEDE SER NULO): El procedimiento presupuestado específico al que se aplicó esta porción del dinero. Un valor NULO aquí indica que esta parte del pago es un "Abono Libre" que no fue asignado en el sistema de origen.
+* Monto_Aplicado_Al_Detalle (NUMÉRICO, NO NULO): La cantidad específica de dinero de la transacción de pago que se destinó a este ID_Detalle_Presupuesto. Proviene de la columna original Pagado_ID_Detalle_Presupuesto.
+
+6.3. Cómo Usar Estas Tablas Juntas (La Lógica para Sherlock)
+        Con esta estructura, tu asistente (Sherlock) podrá razonar de la siguiente manera:
+* Para saber el total recaudado en un período: Sherlock deberá sumar la columna Total_Pago_Transaccion de la tabla hechos_pagos_transacciones.
+* Para saber cuánto se ha pagado por un tratamiento específico (ej. una endodoncia con ID_Detalle_Presupuesto = DP_456): Sherlock deberá ir a hechos_pagos_aplicaciones_detalle, filtrar por ID_Detalle_Presupuesto = 'DP_456' y sumar la columna Monto_Aplicado_Al_Detalle.
+* Para saber el saldo a favor de un paciente: Sherlock deberá ir a hechos_pagos_transacciones, filtrar por el ID_Paciente y sumar la columna Monto_Abono_Libre_Original_En_Tx.
+
+
+
+
+

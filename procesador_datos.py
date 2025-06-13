@@ -184,16 +184,16 @@ def generar_insights_pacientes(
                 )
 
                 # b. Unir DataFrames para una tabla de citas completa
-
-                # --- LÍNEAS CORREGIDAS ---
                 df_citas_filtrado[col_id_cita] = df_citas_filtrado[col_id_cita].astype(
                     str)
                 df_citas_mot[col_id_cita] = df_citas_mot[col_id_cita].astype(
                     str)
-                # --- FIN DE LÍNEAS CORREGIDAS ---
 
-                cols_from_motivo = ['ID_Cita', 'Fecha de creación cita', 'Hora Inicio Cita',
+                # --- LÍNEA CORREGIDA ---
+                cols_from_motivo = ['ID_Cita', 'Cita_Creacion', 'Hora Inicio Cita',
                                     'Hora Fin Cita', 'Motivo Cita', 'Sucursal', 'ID_Tratamiento']
+                # --- FIN DE LÍNEA CORREGIDA ---
+
                 cols_exist = [
                     c for c in cols_from_motivo if c in df_citas_mot.columns]
                 hechos_citas_df = pd.merge(df_citas_filtrado, df_citas_mot[cols_exist].drop_duplicates(

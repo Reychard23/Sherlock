@@ -102,7 +102,7 @@ Citas_Motivo.xlsx	Sheet1	Mes de generación del tratamiento	Mes de generación del
 Citas_Motivo.xlsx	Sheet1	Año de generación del tratamiento	Año de generación del tratamiento	Drop
 Citas_Motivo.xlsx	Sheet1	Nombre Sucursal	Sucursal	Keep
 Citas_Motivo.xlsx	Sheet1	Agendado por	Agendado por	Drop
-Citas_Motivo.xlsx	Sheet1	Fecha de creación de cita	Fecha de creación de cita	Keep
+Citas_Motivo.xlsx	Sheet1	Fecha de creación de cita	Cita_Creacion	Keep
 Citas_Motivo.xlsx	Sheet1	Observaciones	Observaciones	Drop
 Citas_Motivo.xlsx	Sheet1	Motivo de Atención	Motivo de Atención	Drop
 Citas_Motivo.xlsx	Sheet1	Motivo Cita	Motivo Cita	Keep
@@ -143,7 +143,7 @@ Citas_Pacientes.xlsx	Citas	Confirmado por Whatsapp	Confirmado por Whatsapp	Drop
 Citas_Pacientes.xlsx	Citas	No se establece contacto por ningún medio	No se establece contacto por ningún medio	Drop
 Citas_Pacientes.xlsx	Citas	No se pudo atender	No se pudo atender	Drop
 Citas_Pacientes.xlsx	Citas	Confirmado personalmente	Confirmado personalmente	Drop
-Citas_Pacientes.xlsx	Citas	Confirmado por Whatsapp	Confirmado por Whatsapp	Drop
+Citas_Pacientes.xlsx	Citas	Confirmado por Whatsapp	Confirmado por Whats 2	Drop
 Citas_Pacientes.xlsx	Citas	Anulado por pcte. via Whatsapp	Anulado por pcte. via Whatsapp	Drop
 Citas_Pacientes.xlsx	Citas	Consecutivo cita	Consecutivo_cita	Keep
 Citas_Pacientes.xlsx	Citas	Total de citas Asistidas	Total_Citas asistidas	Drop
@@ -244,7 +244,7 @@ Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Fecha de envío de 
 Tratamiento Generado Mex.xlsx	Tratamientos_EstadoPresupuestos	Nombre tratamiento	Tratamiento_Nombre	Keep
 Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Marca	Marca	Drop
 Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Sucursal	Sucursal	Keep
-Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Categoría Gasto	Categoria_Gasto	Keep
+Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Categoría Gasto	Categoria_Gasto	Drop
 Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Detalle Gasto	Detalle_Gasto	Drop
 Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Fecha del Gasto	Fecha del Gasto	Keep
 Tabla Gastos Aliadas Mexico.xlsx	Hoja1	Monto Gasto	Monto Gasto	Keep

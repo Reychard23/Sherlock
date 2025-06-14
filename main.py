@@ -1,8 +1,7 @@
-
 import json
-from fastapi import FastAPI, Request, File, UploadFile, HTTPException, Form, BackgroundTasks, Body
+from fastapi import FastAPI, Request, File, UploadFile, HTTPException, Form, BackgroundTasks, Body, Depends, Header
 from fastapi.responses import JSONResponse
-from typing import List, Dict, Any, Tuple, Literal
+from typing import List, Dict, Any, Tuple, Literal, Annotated
 import pandas as pd
 import numpy as np
 import os
@@ -19,7 +18,9 @@ _saved_files: dict[str, bytes] = {}
 _indice_file_content: bytes | None = None
 _indice_file_name: str | None = None
 
+# --- CONFIGURACIÓN DE BASE DE DATOS Y API KEY ---
 DATABASE_URL = os.environ.get("DATABASE_URL")
+SHERLOCK_API_KEY = os.environ.get("SHERLOCK_API_KEY")
 engine = None
 
 if not DATABASE_URL:
@@ -33,13 +34,34 @@ else:
         print(f"Error al crear el engine de SQLAlchemy o al conectar: {e}")
         engine = None
 
+# Función de dependencia para verificar la API Key
+
+
+async def verify_api_key(x_api_key: Annotated[str, Header()]):
+    """
+    Verifica que la cabecera x-api-key en la petición coincida con la 
+    variable de entorno SHERLOCK_API_KEY.
+    """
+    if not SHERLOCK_API_KEY:
+        print("--- Log Sherlock (ERROR FATAL): La variable de entorno SHERLOCK_API_KEY no está configurada en el servidor.")
+        raise HTTPException(
+            status_code=500, detail="Error de configuración en el servidor.")
+
+    if x_api_key != SHERLOCK_API_KEY:
+        print(
+            f"--- Log Sherlock (AUTH): Intento de acceso RECHAZADO con API Key incorrecta: {x_api_key}")
+        raise HTTPException(
+            status_code=403, detail="API Key incorrecta o no proporcionada.")
+
+    print("--- Log Sherlock (AUTH): Acceso permitido con API Key correcta.")
+
+
 # --- Función para guardar DataFrame en Supabase ---
-
-
 def save_df_to_supabase(
     df: pd.DataFrame, table_name: str, db_engine: Any,
     if_exists: Literal['fail', 'replace', 'append'] = 'replace'
 ):
+
     if db_engine is None:
         raise ConnectionError("Conexión a la base de datos no establecida.")
     if df.empty:
@@ -63,6 +85,7 @@ def save_df_to_supabase(
 
 @app.post("/upload_single_file/")
 async def upload_single_file(file: UploadFile = File(...), filename: str = Form(...)):
+
     global _indice_file_content, _indice_file_name
     try:
         content = await file.read()
@@ -83,6 +106,7 @@ async def upload_single_file(file: UploadFile = File(...), filename: str = Form(
 
 
 class InMemoryUploadFile:
+
     def __init__(self, filename: str, content: bytes):
         self.filename = filename
         self.file = io.BytesIO(content)
@@ -180,11 +204,14 @@ async def trigger_processing_and_save(background_tasks: BackgroundTasks):
     print("--- Log Sherlock: Tarea de procesamiento encolada. Devolviendo 202 a Make. ---")
     return JSONResponse(status_code=202, content={"message": "Solicitud de procesamiento recibida. El trabajo se realiza en segundo plano."})
 
-# --- Endpoint 3: Ejecutor de SQL para tu "Playground" Manual ---
+# --- Endpoint 3: Ejecutor de SQL --- # MODIFICADO
 
 
 @app.post("/execute_sql_query/")
-async def execute_sql(sql_query: str = Body(..., embed=True)):
+async def execute_sql(
+    sql_query: str = Body(..., embed=True),
+    api_key: None = Depends(verify_api_key)
+):
     if engine is None:
         raise HTTPException(
             status_code=500, detail="Conexión a DB no disponible.")

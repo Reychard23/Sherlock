@@ -60,16 +60,16 @@ La aplicación FastAPI expone varios endpoints clave:
 * /admin/reset_memory/: Una utilidad de depuración para limpiar la memoria del servidor entre pruebas.
 
 5. Integración del Asistente con IA “Sherlock”
-Una vez el ETL esté completo. El próximo paso es construir el cerebro conversacional de Sherlock.
-* Método: Se utilizará Prompt Engineering para enseñarle a un LLM (Gemini/GPT) cómo responder preguntas.
+Toda vez que el ETL ya está completo. El próximo paso es construir el cerebro conversacional de Sherlock.
+* Método: Se utilizará Prompt Engineering para enseñarle a un LLM (Gemini/GPT) cómo responder preguntas. Esto ya está ralizado con éxito.
 * Herramientas Iniciales: Un "Playground" de IA (como Google AI Studio) y el Editor de SQL de Supabase.
 * "Super Prompt": Se creará un prompt de sistema detallado que incluirá:
 * El rol y las instrucciones del asistente ("Eres Sherlock...").
 * La descripción completa del esquema de la base de datos (tablas, columnas, descripciones y relaciones clave).
 * Ejemplos de preguntas de negocio y sus correspondientes queries SQL.
 
-* Flujo de Trabajo: El plan es iterar manualmente: hacer preguntas en el Playground, obtener el SQL, ejecutarlo en Supabase para validar, y refinar el prompt hasta que genere queries precisas de forma consistente.
-* Automatización Futura: Una vez que el prompt sea robusto, se construirá el escenario final de Make que conectará Slack con el endpoint /execute_sql_query/ para automatizar todo el ciclo de preguntas y respuestas.
+* Flujo de Trabajo: El plan es iterar manualmente: hacer preguntas en el Playground, obtener el SQL, ejecutarlo en Supabase para validar, y refinar el prompt hasta que genere queries precisas de forma consistente. Esto ya está realizado.
+* Automatización Futura: Una vez que el prompt sea robusto, se construirá el escenario final de Make que conectará Slack con el endpoint /execute_sql_query/ para automatizar todo el ciclo de preguntas y respuestas. Este es el siguiente paso.
 
 6. Detalles de tablas especiales:
 6.1. Tabla: hechos_pagos_transacciones

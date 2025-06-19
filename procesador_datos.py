@@ -304,6 +304,11 @@ def generar_insights_pacientes(
         df_presupuestos = get_df_by_type(
             processed_dfs, "Presupuesto por Accion_df", all_advertencias)
         if df_presupuestos is not None:
+            if 'Tratamiento_fecha_de_generacion' in df_presupuestos.columns:
+                df_presupuestos['Tratamiento_fecha_de_generacion'] = pd.to_datetime(
+                    df_presupuestos['Tratamiento_fecha_de_generacion'], errors='coerce')
+                print(
+                    "--- Log Sherlock (BG Task): Columna 'Tratamiento_fecha_de_generacion' convertida a datetime.")
             if 'Procedimiento_precio_original' in df_presupuestos.columns and 'Procedimiento_precio_paciente' in df_presupuestos.columns:
                 df_presupuestos['Descuento_Presupuestado_Detalle'] = pd.to_numeric(
                     df_presupuestos['Procedimiento_precio_original'], errors='coerce') - pd.to_numeric(df_presupuestos['Procedimiento_precio_paciente'], errors='coerce')

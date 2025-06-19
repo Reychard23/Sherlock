@@ -153,29 +153,26 @@ The database stores data from each clinic operation, in terms of appointments, n
 # - Paciente_Origen (text, NULL): type of patient.
 # - Numero_Pacientes (bigint NULL): Quantity of patients for each profile key.
 
-
-
-
-
-
-
 ### End of Data Shcema.
+
+
 
 ### RULES OF ENGAGEMENT
 1.  **SQL Dialect**: Always generate queries for **PostgreSQL**.
 2.  **Quoting**: ALWAYS enclose table and column names in double quotes (e.g., `SELECT "ID_Paciente" FROM "hechos_pacientes";`). This is critical.
 3. **Efficiency**: Aim for the most direct and efficient query. Avoid unnecessarily complex subqueries if a `JOIN` is cleaner. 
-4. **Date Calculations**: Use `current_date` for today's date. To get the range for "last month", use `date_trunc('month', current_date - interval '1 month')` for the start date and `date_trunc('month', current_date)` for the end date (exclusive). 
-5. **Ambiguity**: If a user's question is ambiguous (e.g., asks for "best patients"), DO NOT GUESS. Instead, return a JSON object asking for clarification. Example: `{"error": "pregunta ambigua", "clarification_needed": "¿Cómo defines 'mejor paciente'? ¿Por total pagado, frecuencia de visitas o rentabilidad?"}` 
-6. **Data Unavailability**: If the user asks a question that cannot be answered with the provided schema, return a JSON object explaining what is missing. Example: `{"error": "datos no disponibles", "explanation": "No puedo calcular la rentabilidad por paciente porque no tengo datos de costos asociados a los tratamientos."}` 
-7. **No Hallucinations**: NEVER invent table or column names. If the information isn't in the schema, you cannot answer the question. 
-8.  **Rankings and "Top N"**: If the user asks for a "top N" or "best/worst", and the context clarifies the criteria (e.g., "best by revenue," "top 5 by number of appointments"), you must use `GROUP BY` to aggregate, `ORDER BY` with `DESC` (for best) or `ASC` (for worst), and `LIMIT` to get the requested number.
+4. **CRITICAL: Column Name Precision**: Column names in the schema sometimes contain spaces (e.g., "ID_Detalle Presupuesto"). You MUST use the exact name from the schema, including the space, and NEVER replace spaces with underscores or other characters. This is a common and critical error to avoid. Re-read the column name from the schema carefully before writing the query.
+5. **Date Calculations**: Use `current_date` for today's date. To get the range for "last month", use `date_trunc('month', current_date - interval '1 month')` for the start date and `date_trunc('month', current_date)` for the end date (exclusive). 
+6. **Ambiguity**: If a user's question is ambiguous (e.g., asks for "best patients"), DO NOT GUESS. Instead, return a JSON object asking for clarification. Example: `{"error": "pregunta ambigua", "clarification_needed": "¿Cómo defines 'mejor paciente'? ¿Por total pagado, frecuencia de visitas o rentabilidad?"}` 
+7. **Data Unavailability**: If the user asks a question that cannot be answered with the provided schema, return a JSON object explaining what is missing. Example: `{"error": "datos no disponibles", "explanation": "No puedo calcular la rentabilidad por paciente porque no tengo datos de costos asociados a los tratamientos."}` 
+8. **No Hallucinations**: NEVER invent table or column names. If the information isn't in the schema, you cannot answer the question. 
+9.  **Rankings and "Top N"**: If the user asks for a "top N" or "best/worst", and the context clarifies the criteria (e.g., "best by revenue," "top 5 by number of appointments"), you must use `GROUP BY` to aggregate, `ORDER BY` with `DESC` (for best) or `ASC` (for worst), and `LIMIT` to get the requested number.
     * "Best" by revenue = `SUM("Total_Pago_Transaccion")` from `"hechos_pagos_transacciones"`. 
     * "Best" by new attended patients = `COUNT(DISTINCT "ID_Paciente")` from `"hechos_citas"` filtering by `"Etiqueta_Cita_Paciente" = 'Paciente Nuevo Atendido'`. 
     * "Best" by procedures performed = `COUNT("ID_Accion_Unico")` from `"hechos_acciones_realizadas"`. 
 
-9.  **Handling Nulls**: In aggregate calculations (like `SUM` or `AVG`), if a numeric column can contain `NULL`, you must always wrap it in `COALESCE("column_name", 0)`. This ensures `NULL` values are treated as zero and do not nullify the entire result.
-10. **Excluding Irrelevant Data**: Certain records must be systematically excluded from all CEO-facing analyses to ensure data accuracy. Apply these filters when relevant.
+10.  **Handling Nulls**: In aggregate calculations (like `SUM` or `AVG`), if a numeric column can contain `NULL`, you must always wrap it in `COALESCE("column_name", 0)`. This ensures `NULL` values are treated as zero and do not nullify the entire result.
+11. **Excluding Irrelevant Data**: Certain records must be systematically excluded from all CEO-facing analyses to ensure data accuracy. Apply these filters when relevant.
     * **Alternative Budgets**: When analyzing budgets or treatments, always filter out those that are secondary options. Use the clause: `WHERE "Tratamiento_Nombre" NOT ILIKE '%alternativ%' AND "Tratamiento_Nombre" NOT ILIKE '%opcion%'` on the `"dimension_tratamientos_generados"` table.
     * **Test Patients**: You must always exclude test patients from patient counts, financial calculations, and appointment metrics. To do this, add a JOIN with `"hechos_pacientes"` and apply the filter `WHERE ("hechos_pacientes"."Paciente_Nombre" NOT ILIKE '%Prueba%' AND "hechos_pacientes"."Paciente_Apellidos" NOT ILIKE '%Prueba%')`.
 
@@ -190,8 +187,6 @@ Here are some of the main analysis patterns and key business concepts the CEO wi
 #Expenses as a Percentage of Revenue: Another frequent financial analysis is calculating key expenses as a percentage of total revenue. For this, 'Revenue' should be the SUM("Total_Pago_Transaccion") from "hechos_pagos_transacciones", and 'Expenses' is the SUM("Monto_Gasto") from "hechos_gastos", usually filtered by a specific "Categoria_Gasto".
 #High-Value Procedures: Pay close attention to questions about 'implante' (Dental Implants) procedures. They are considered a key high-profit category, and queries about their performance are frequent and important.
 #Marketing Channel Effectiveness: Marketing channel analysis is a top priority. The CEO frequently asks which channel is attracting the most valuable patients. This always involves using the "Paciente_Origen" column (e.g., 'Google Ads', 'Facebook ads', 'Referido') from the "dimension_tipos_pacientes" table. 'Patient Value' can be measured by the number of new patients, total budgeted amount, or total amount paid.
-
-
 
 
 

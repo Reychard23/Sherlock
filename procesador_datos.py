@@ -4,6 +4,19 @@ import io
 import os
 from typing import Dict, Any, List, Optional, Tuple, Set
 
+
+# --- Función de Ayuda: Reemplazar espacios con guiones bajos ---
+def replace_spaces_with_underscores(name: str) -> str:
+    """
+    Reemplaza los espacios en un string con guiones bajos,
+    pero mantiene la capitalización original.
+    Ej: 'Nombre Paciente' -> 'Nombre_Paciente'
+    """
+    if not isinstance(name, str):
+        return name
+    # Reemplaza espacios y guiones con guiones bajos
+    return name.replace(' ', '_').replace('-', '_')
+
 # --- Función 1: Carga y Limpieza Inicial ---
 
 
@@ -123,7 +136,6 @@ def generar_insights_pacientes(
     try:
         # --- PASO 1: Preparar Tablas de Dimensiones ---
         print("--- PASO 1: Preparando tablas de dimensiones...")
-        # Las claves de búsqueda DEBEN coincidir con los nombres de archivo (con espacios) + '_df'
         dimension_mapping = {
             "Tipos de pacientes_df": "dimension_tipos_pacientes",
             "Tabla_Procedimientos_df": "dimension_procedimientos",
@@ -136,6 +148,7 @@ def generar_insights_pacientes(
             df_dim = get_df_by_type(processed_dfs, df_key, all_advertencias)
             if df_dim is not None:
                 resultados_dfs[table_name] = df_dim.copy()
+
         # --- PASO 1.5: Añadir 'Sucursal' a dimension_tratamientos_generados ---
         print(
             "--- PASO 1.5: Enriqueciendo dimension_tratamientos_generados con Sucursal...")
@@ -228,8 +241,8 @@ def generar_insights_pacientes(
                 hechos_citas_df[col_fecha_cita] = pd.to_datetime(
                     hechos_citas_df[col_fecha_cita], errors='coerce').dt.normalize()
 
-                df_atendidas = hechos_citas_df[hechos_citas_df[col_asistida]
-                                               == 1 & hechos_citas_df[col_fecha_cita].notna()]
+                df_atendidas = hechos_citas_df[(hechos_citas_df[col_asistida] == 1) & (
+                    hechos_citas_df[col_fecha_cita].notna())]
                 if not df_atendidas.empty:
                     primera_cita = df_atendidas.groupby(col_id_paciente)[col_fecha_cita].min(
                     ).reset_index().rename(columns={col_fecha_cita: 'Fecha_Primera_Cita_Atendida_Real'})
@@ -283,8 +296,13 @@ def generar_insights_pacientes(
                 df_movimiento['Abono_Libre'] = pd.to_numeric(
                     df_movimiento['Abono_Libre'], errors='coerce').fillna(0)
 
+            # Renombrar 'Medio_de_pago_dentalink' a 'ID_Medio_de_pago' si existe
+            if 'Medio_de_pago_dentalink' in df_movimiento.columns:
+                df_movimiento.rename(
+                    columns={'Medio_de_pago_dentalink': 'ID_Medio_de_pago'}, inplace=True)
+
             agg_cols = {col: 'first' for col in ['ID_Paciente', 'Pago_fecha_recepcion', 'Total_Pago',
-                                                 'Abono_Libre', 'Medio_de_pago', 'Sucursal'] if col in df_movimiento.columns}
+                                                 'Abono_Libre', 'ID_Medio_de_pago', 'Sucursal'] if col in df_movimiento.columns}
             if agg_cols:
                 tx_pagos = df_movimiento.groupby('ID_Pago', as_index=False).agg(agg_cols).rename(columns={
                     'Abono_Libre': 'Monto_Abono_Libre_Original_En_Tx', 'Total_Pago': 'Total_Pago_Transaccion'})
@@ -318,6 +336,48 @@ def generar_insights_pacientes(
                     'ID_Paciente'].nunique().reset_index(name='Numero_Pacientes')
                 if not perfil.empty:
                     resultados_dfs['perfil_edad_sexo_origen_paciente'] = perfil
+
+        # --- PASO FINAL 1: Estandarizar espacios a guiones bajos en columnas ---
+        print("--- PASO FINAL 1: Reemplazando espacios con guiones bajos en todas las columnas...")
+        resultados_formateados_dfs: Dict[str, pd.DataFrame] = {}
+        for table_name, df in resultados_dfs.items():
+            df_copy = df.copy()
+            # Aplica la función de reemplazo a cada nombre de columna
+            df_copy.columns = [replace_spaces_with_underscores(
+                col) for col in df_copy.columns]
+            resultados_formateados_dfs[table_name] = df_copy
+            print(f"    - Columnas de tabla '{table_name}' formateadas.")
+
+        # --- PASO FINAL 2: Asegurar tipos de datos de fecha correctos ---
+        print("--- PASO FINAL 2: Convirtiendo columnas de fecha al formato correcto...")
+
+        # Lista de todas las columnas que deben ser de tipo fecha en el proyecto
+        columnas_de_fecha = {
+            'Procedimiento_Fecha_Realizacion',
+            'Fecha_Cita',
+            'Cita_Creacion',
+            'Fecha_Primera_Cita_Atendida_Real',
+            'Fecha_del_Gasto',
+            'Fecha_de_nacimiento',
+            'pago_fecha_recepcion',  # Usado en la tabla de aplicaciones de pago
+            'Pago_fecha_recepcion',  # Usado en la tabla de transacciones de pago
+            'Tratamiento_fecha_de_generacion'
+        }
+
+        # Bucle que recorre cada tabla final
+        for table_name, df in resultados_formateados_dfs.items():
+            # Bucle que recorre cada columna de la tabla actual
+            for col in df.columns:
+                if col in columnas_de_fecha:
+                    print(
+                        f"    - Convirtiendo columna de fecha '{col}' en tabla '{table_name}'.")
+                    # 'coerce' es clave: si una fecha no se puede leer, la convierte en Nulo (NaT) y no detiene el proceso
+                    df[col] = pd.to_datetime(df[col], errors='coerce')
+
+        # --- Estas son las dos últimas líneas que ya tenías ---
+        print(
+            f"--- Log Sherlock (BG Task): Fin de generar_insights_pacientes. DataFrames finales listos ({len(resultados_formateados_dfs)}): {list(resultados_formateados_dfs.keys())}")
+        return resultados_formateados_dfs
 
     except Exception as e_general:
         print(

@@ -117,12 +117,13 @@ def generar_insights_pacientes(
     try:
         # --- PASO 1: Preparar Tablas de Dimensiones ---
         print("--- PASO 1: Preparando tablas de dimensiones...")
+        # MODIFICADO: Nombres de claves con guion bajo
         dimension_mapping = {
-            "Tipos de pacientes_df": "dimension_tipos_pacientes",
+            "Tipos_de_pacientes_df": "dimension_tipos_pacientes",
             "Tabla_Procedimientos_df": "dimension_procedimientos",
             "Sucursal_df": "dimension_sucursales",
             "Lada_df": "dimension_lada",
-            "Tratamiento Generado Mex_df": "dimension_tratamientos_generados",
+            "Tratamiento_Generado_Mex_df": "dimension_tratamientos_generados",
             "Medios_de_pago_df": "dimension_medios_de_pago"
         }
         for df_key, table_name in dimension_mapping.items():
@@ -137,7 +138,8 @@ def generar_insights_pacientes(
             processed_dfs, "Pacientes_Nuevos_df", all_advertencias)
         if df_pacientes_base is not None:
             df_pacientes_enriquecido = df_pacientes_base.copy()
-            if 'Fecha de nacimiento' in df_pacientes_enriquecido.columns:
+            # MODIFICADO: 'Fecha de nacimiento' -> 'Fecha_de_nacimiento'
+            if 'Fecha_de_nacimiento' in df_pacientes_enriquecido.columns:
                 def calcular_edad(fecha_nac):
                     if pd.isnull(fecha_nac):
                         return pd.NA
@@ -149,14 +151,16 @@ def generar_insights_pacientes(
                     except:
                         return pd.NA
                 df_pacientes_enriquecido['Edad'] = pd.to_datetime(
-                    df_pacientes_enriquecido['Fecha de nacimiento'], errors='coerce').apply(calcular_edad).astype('Int64')
-            if 'dimension_tipos_pacientes' in resultados_dfs and 'Tipo Dentalink' in df_pacientes_enriquecido.columns:
+                    df_pacientes_enriquecido['Fecha_de_nacimiento'], errors='coerce').apply(calcular_edad).astype('Int64')
+
+            # MODIFICADO: 'Tipo Dentalink' -> 'Tipo_Dentalink'
+            if 'dimension_tipos_pacientes' in resultados_dfs and 'Tipo_Dentalink' in df_pacientes_enriquecido.columns:
                 df_dim_tipos_pac = resultados_dfs['dimension_tipos_pacientes']
-                if 'Tipo Dentalink' in df_dim_tipos_pac.columns and 'Paciente_Origen' in df_dim_tipos_pac.columns:
+                if 'Tipo_Dentalink' in df_dim_tipos_pac.columns and 'Paciente_Origen' in df_dim_tipos_pac.columns:
                     df_origen_merge = df_dim_tipos_pac[[
-                        'Tipo Dentalink', 'Paciente_Origen']].drop_duplicates(subset=['Tipo Dentalink'])
+                        'Tipo_Dentalink', 'Paciente_Origen']].drop_duplicates(subset=['Tipo_Dentalink'])
                     df_pacientes_enriquecido = pd.merge(
-                        df_pacientes_enriquecido, df_origen_merge, on='Tipo Dentalink', how='left')
+                        df_pacientes_enriquecido, df_origen_merge, on='Tipo_Dentalink', how='left')
             resultados_dfs['hechos_pacientes'] = df_pacientes_enriquecido.copy()
 
         # --- PASO 3: Procesar y Enriquecer `hechos_citas` ---
@@ -167,14 +171,16 @@ def generar_insights_pacientes(
         df_citas_mot = get_df_by_type(
             processed_dfs, "Citas_Motivo_df", all_advertencias)
 
-        if df_citas_pac is not None and df_citas_mot is not None and 'ID_Paciente' in df_citas_pac.columns and 'Fecha Cita' in df_citas_pac.columns:
+        # MODIFICADO: 'Fecha Cita' -> 'Fecha_Cita'
+        if df_citas_pac is not None and df_citas_mot is not None and 'ID_Paciente' in df_citas_pac.columns and 'Fecha_Cita' in df_citas_pac.columns:
             try:
                 # a. Definir nombres de columnas y limpiar datos
                 col_id_cita = 'ID_Cita'
                 col_asistida = 'Cita_asistida'
-                col_duplicada = 'Cita duplicada'
+                # MODIFICADO: 'Cita duplicada' -> 'Cita_duplicada'
+                col_duplicada = 'Cita_duplicada'
                 col_id_paciente = 'ID_Paciente'
-                col_fecha_cita = 'Fecha Cita'
+                col_fecha_cita = 'Fecha_Cita'
 
                 df_citas_pac[col_asistida] = pd.to_numeric(
                     df_citas_pac[col_asistida], errors='coerce').fillna(0).astype(int)
@@ -189,10 +195,9 @@ def generar_insights_pacientes(
                 df_citas_mot[col_id_cita] = df_citas_mot[col_id_cita].astype(
                     str)
 
-                # --- LÍNEA CORREGIDA ---
-                cols_from_motivo = ['ID_Cita', 'Cita_Creacion', 'Hora Inicio Cita',
-                                    'Hora Fin Cita', 'Motivo Cita', 'Sucursal', 'ID_Tratamiento']
-                # --- FIN DE LÍNEA CORREGIDA ---
+                # MODIFICADO: Nombres de columnas con guion bajo
+                cols_from_motivo = ['ID_Cita', 'Cita_Creacion', 'Hora_Inicio_Cita',
+                                    'Hora_Fin_Cita', 'Motivo_Cita', 'Sucursal', 'ID_Tratamiento']
 
                 cols_exist = [
                     c for c in cols_from_motivo if c in df_citas_mot.columns]
@@ -259,13 +264,14 @@ def generar_insights_pacientes(
                 # --- f. Convertir Horas y Calcular Duración (NUEVO BLOQUE) ---
                 print(
                     f"--- Log Sherlock (BG Task): Convirtiendo horas y calculando duración de citas...")
-                col_hora_inicio = 'Hora Inicio Cita'
-                col_hora_fin = 'Hora Fin Cita'
+                # MODIFICADO: 'Hora Inicio Cita' -> 'Hora_Inicio_Cita', etc.
+                col_hora_inicio = 'Hora_Inicio_Cita'
+                col_hora_fin = 'Hora_Fin_Cita'
 
                 if col_hora_inicio in hechos_citas_df.columns and col_hora_fin in hechos_citas_df.columns:
-                    inicio_str = hechos_citas_df['Fecha Cita'].dt.strftime(
+                    inicio_str = hechos_citas_df['Fecha_Cita'].dt.strftime(
                         '%Y-%m-%d') + ' ' + hechos_citas_df[col_hora_inicio].astype(str)
-                    fin_str = hechos_citas_df['Fecha Cita'].dt.strftime(
+                    fin_str = hechos_citas_df['Fecha_Cita'].dt.strftime(
                         '%Y-%m-%d') + ' ' + hechos_citas_df[col_hora_fin].astype(str)
 
                     hechos_citas_df['Inicio_Cita_Timestamp'] = pd.to_datetime(
@@ -301,14 +307,17 @@ def generar_insights_pacientes(
 
         # --- PASO 4: Procesar Otros Hechos de Negocio ---
         print("--- PASO 4: Procesando presupuestos, acciones, pagos y gastos...")
+        # MODIFICADO: Clave de DataFrame
         df_presupuestos = get_df_by_type(
-            processed_dfs, "Presupuesto por Accion_df", all_advertencias)
+            processed_dfs, "Presupuesto_por_Accion_df", all_advertencias)
         if df_presupuestos is not None:
+            # MODIFICADO: 'Tratamiento_fecha_de_generacion'
             if 'Tratamiento_fecha_de_generacion' in df_presupuestos.columns:
                 df_presupuestos['Tratamiento_fecha_de_generacion'] = pd.to_datetime(
                     df_presupuestos['Tratamiento_fecha_de_generacion'], errors='coerce')
                 print(
                     "--- Log Sherlock (BG Task): Columna 'Tratamiento_fecha_de_generacion' convertida a datetime.")
+
             if 'Procedimiento_precio_original' in df_presupuestos.columns and 'Procedimiento_precio_paciente' in df_presupuestos.columns:
                 df_presupuestos['Descuento_Presupuestado_Detalle'] = pd.to_numeric(
                     df_presupuestos['Procedimiento_precio_original'], errors='coerce') - pd.to_numeric(df_presupuestos['Procedimiento_precio_paciente'], errors='coerce')
@@ -325,22 +334,24 @@ def generar_insights_pacientes(
         df_movimiento = get_df_by_type(
             processed_dfs, "Movimiento_df", all_advertencias)
         if df_movimiento is not None and 'ID_Pago' in df_movimiento.columns:
-            if 'Total Pago' in df_movimiento.columns:
-                df_movimiento['Total Pago'] = pd.to_numeric(
-                    df_movimiento['Total Pago'], errors='coerce').fillna(0)
-            if 'Abono Libre' in df_movimiento.columns:
-                df_movimiento['Abono Libre'] = pd.to_numeric(
-                    df_movimiento['Abono Libre'], errors='coerce').fillna(0)
+            # MODIFICADO: 'Total Pago' -> 'Total_Pago', 'Abono Libre' -> 'Abono_Libre'
+            if 'Total_Pago' in df_movimiento.columns:
+                df_movimiento['Total_Pago'] = pd.to_numeric(
+                    df_movimiento['Total_Pago'], errors='coerce').fillna(0)
+            if 'Abono_Libre' in df_movimiento.columns:
+                df_movimiento['Abono_Libre'] = pd.to_numeric(
+                    df_movimiento['Abono_Libre'], errors='coerce').fillna(0)
 
-            agg_cols = {col: 'first' for col in ['ID_Paciente', 'Pago_fecha_recepcion', 'Total Pago',
-                                                 'Abono Libre', 'Medio_de_pago', 'Sucursal'] if col in df_movimiento.columns}
+            agg_cols = {col: 'first' for col in ['ID_Paciente', 'Pago_fecha_recepcion', 'Total_Pago',
+                                                 'Abono_Libre', 'Medio_de_pago', 'Sucursal'] if col in df_movimiento.columns}
 
             if agg_cols:
                 tx_pagos = df_movimiento.groupby('ID_Pago', as_index=False).agg(agg_cols).rename(columns={
-                    'Abono Libre': 'Monto_Abono_Libre_Original_En_Tx', 'Total Pago': 'Total_Pago_Transaccion'})
+                    'Abono_Libre': 'Monto_Abono_Libre_Original_En_Tx', 'Total_Pago': 'Total_Pago_Transaccion'})
                 resultados_dfs['hechos_pagos_transacciones'] = tx_pagos
 
-            app_cols_map = {'ID_Pago': 'ID_Pago', 'ID_Detalle Presupuesto': 'ID_Detalle_Presupuesto',
+            # MODIFICADO: 'ID_Detalle Presupuesto' -> 'ID_Detalle_Presupuesto'
+            app_cols_map = {'ID_Pago': 'ID_Pago', 'ID_Detalle_Presupuesto': 'ID_Detalle_Presupuesto',
                             'Pagado_ID_Detalle_Presupuesto': 'Monto_Aplicado_Al_Detalle', 'Pago_fecha_recepcion': 'pago_fecha_recepcion', 'Sucursal': 'Sucursal'}
 
             app_cols_exist = [
@@ -350,8 +361,9 @@ def generar_insights_pacientes(
                     columns=app_cols_map)
                 resultados_dfs['hechos_pagos_aplicaciones_detalle'] = app_df
 
+        # MODIFICADO: Clave de DataFrame
         df_gastos = get_df_by_type(
-            processed_dfs, "Tabla Gastos Aliadas Mexico_df", all_advertencias)
+            processed_dfs, "Tabla_Gastos_Aliadas_Mexico_df", all_advertencias)
         if df_gastos is not None:
             df_gastos.reset_index(inplace=True)
             df_gastos.rename(columns={'index': 'ID_Gasto_Unico'}, inplace=True)

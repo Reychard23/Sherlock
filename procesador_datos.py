@@ -136,6 +136,36 @@ def generar_insights_pacientes(
             df_dim = get_df_by_type(processed_dfs, df_key, all_advertencias)
             if df_dim is not None:
                 resultados_dfs[table_name] = df_dim.copy()
+        # --- PASO 1.5: Añadir 'Sucursal' a dimension_tratamientos_generados ---
+        print(
+            "--- PASO 1.5: Enriqueciendo dimension_tratamientos_generados con Sucursal...")
+        df_presupuesto_base = get_df_by_type(
+            processed_dfs, "Presupuesto por Accion_df", all_advertencias)
+        df_tratamientos_generados = resultados_dfs.get(
+            "dimension_tratamientos_generados")
+
+        if df_presupuesto_base is not None and df_tratamientos_generados is not None and 'ID_Tratamiento' in df_presupuesto_base and 'Sucursal' in df_presupuesto_base:
+            # 1. Crear un mapa simple: ID_Tratamiento -> Sucursal, eliminando duplicados.
+            mapa_sucursales = df_presupuesto_base[[
+                'ID_Tratamiento', 'Sucursal']].drop_duplicates(subset=['ID_Tratamiento'])
+
+            # 2. Unir (merge) con la tabla de tratamientos generados usando el ID_Tratamiento.
+            df_tratamientos_actualizado = pd.merge(
+                df_tratamientos_generados,
+                mapa_sucursales,
+                on='ID_Tratamiento',
+                # Usamos 'left' para no perder tratamientos aunque no tengan sucursal.
+                how='left'
+            )
+
+            # 3. Reemplazar el DataFrame viejo con el nuevo que ya incluye la sucursal.
+            resultados_dfs['dimension_tratamientos_generados'] = df_tratamientos_actualizado
+            print(
+                "    - ¡Éxito! La columna 'Sucursal' ha sido agregada a dimension_tratamientos_generados.")
+        else:
+            all_advertencias.append(
+                "ADVERTENCIA: No se pudo añadir 'Sucursal' a dimension_tratamientos_generados por falta de datos base.")
+            print("    - ADVERTENCIA: Faltan datos para agregar la columna 'Sucursal'.")
 
         # --- PASO 2: Procesar y Enriquecer `hechos_pacientes` ---
         print("--- PASO 2: Procesando y enriqueciendo pacientes...")

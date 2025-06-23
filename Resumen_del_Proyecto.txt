@@ -38,6 +38,7 @@ Construir un asistente de IA avanzado llamado "Sherlock" para el Director Genera
 * dimension_tipos_pacientes: Mapea el Tipo Dentalink (del sistema original) a un Paciente_Origen limpio y útil para marketing (ej. 'Google ads', 'Facebook ads’, ‘Instagram ads’, 'Referido').
 * dimension_lada: Catálogo para derivar la Ciudad a partir de números de teléfono
 * dimension_tratamientos_generados: Catálogo de planes de tratamiento, con ID_Tratamiento y Tratamiento_Nombre.
+* Dimension_medios_de_pago: Catálogo de los medios de pago con su ID_Medio_de_pago. Sirve para agrupar los diferentes medios de pago del sistema en grupos con nombres homologados.
 
 3.2. Tablas de hechos
 * hechos_pacientes: La tabla central de pacientes. Cada fila es un ID_Paciente único con sus atributos demográficos y enriquecidos, como la Edad (calculada en Python) y el Paciente_Origen.
